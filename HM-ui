@@ -1,0 +1,656 @@
+--[[
+    UIFramework.lua - 核心 UI 库模块
+    包含 Window, Tab, Button, Toggle, Label, Slider 组件的定义和动画逻辑。
+]]
+
+local UIFramework = {}
+
+--// 核心服务
+local TweenService = game:GetService("TweenService")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+--// 常量
+local TWEEN_INFO_NORMAL = TweenInfo.new(
+    0.3, -- 时长
+    Enum.EasingStyle.Quart, -- 缓动样式
+    Enum.EasingDirection.Out -- 缓动方向
+)
+
+local TWEEN_INFO_SLIGHT = TweenInfo.new(
+    0.2, -- 时长
+    Enum.EasingStyle.Quad,
+    Enum.EasingDirection.Out
+)
+
+--// 基础 UI 模板函数
+local function createBase(className, properties)
+    local instance = Instance.new(className)
+    for prop, value in pairs(properties) do
+        instance[prop] = value
+    end
+    return instance
+end
+
+--// ==================== Window 类定义 (主窗口) ====================
+
+local Window = {}
+Window.__index = Window
+
+function Window.new(title)
+    local self = setmetatable({}, Window)
+
+    --// 基础 GUI 结构
+    self.ScreenGui = createBase("ScreenGui", {
+        Name = "CustomUI",
+        ResetOnSpawn = false,
+        Parent = LocalPlayer:WaitForChild("PlayerGui")
+    })
+
+    self.MainFrame = createBase("Frame", {
+        Name = "WindowFrame",
+        Size = UDim2.new(0.4, 0, 0.6, 0),
+        Position = UDim2.new(0.3, 0, -1, 0), -- 初始位置在屏幕上方，用于动画进入
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        BackgroundColor3 = Color3.fromRGB(30, 30, 40),
+        BorderSizePixel = 0,
+        Parent = self.ScreenGui
+    })
+
+    -- 窗口居中和圆角
+    createBase("UICorner", { CornerRadius = UDim2.new(0, 10), Parent = self.MainFrame })
+
+    --// 标题栏
+    local TitleBar = createBase("Frame", {
+        Name = "TitleBar",
+        Size = UDim2.new(1, 0, 0.1, 0),
+        BackgroundColor3 = Color3.fromRGB(40, 40, 50),
+        BorderSizePixel = 0,
+        Parent = self.MainFrame
+    })
+    
+    createBase("TextLabel", {
+        Name = "Title",
+        Text = title or "自定义UI",
+        Font = Enum.Font.GothamBold,
+        TextSize = 18,
+        TextColor3 = Color3.fromRGB(255, 255, 255),
+        BackgroundTransparency = 1,
+        Size = UDim2.new(0.8, 0, 1, 0),
+        Position = UDim2.new(0, 10, 0, 0),
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = TitleBar
+    })
+    
+    --// 最小化/最大化/关闭按钮
+    local ButtonContainer = createBase("Frame", {
+        Name = "ControlButtons",
+        Size = UDim2.new(0.2, 0, 1, 0),
+        Position = UDim2.new(0.8, 0, 0, 0),
+        BackgroundTransparency = 1,
+        Parent = TitleBar
+    })
+    
+    createBase("UIListLayout", {
+        FillDirection = Enum.FillDirection.Horizontal,
+        HorizontalAlignment = Enum.HorizontalAlignment.Right,
+        VerticalAlignment = Enum.VerticalAlignment.Center,
+        Padding = UDim.new(0, 5),
+        Parent = ButtonContainer
+    })
+
+    self.CloseButton = self:createControlButton("X", Color3.fromRGB(200, 50, 50), ButtonContainer)
+    self.CloseButton.MouseButton1Click:Connect(function() self:Close() end)
+    
+    self.MinimizeButton = self:createControlButton("_", Color3.fromRGB(50, 150, 200), ButtonContainer)
+    self.MinimizeButton.MouseButton1Click:Connect(function() self:Minimize() end)
+    
+    self.IsMinimized = false
+    self.OriginalSize = self.MainFrame.Size
+    self.OriginalPosition = UDim2.new(0.5, 0, 0.5, 0)
+
+    --// 拖拽功能 (Drag)
+    self:MakeDraggable(TitleBar)
+    
+    --// Tab 容器
+    self.TabContainer = createBase("Frame", {
+        Name = "TabContainer",
+        Size = UDim2.new(0.2, 0, 0.9, 0),
+        Position = UDim2.new(0, 0, 0.1, 0),
+        BackgroundColor3 = Color3.fromRGB(50, 50, 60),
+        BorderSizePixel = 0,
+        Parent = self.MainFrame
+    })
+    
+    self.TabListLayout = createBase("UIListLayout", {
+        Padding = UDim.new(0, 5),
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Parent = self.TabContainer
+    })
+
+    --// Page 容器 (显示 Tab 内容)
+    self.PageContainer = createBase("Frame", {
+        Name = "PageContainer",
+        Size = UDim2.new(0.8, 0, 0.9, 0),
+        Position = UDim2.new(0.2, 0, 0.1, 0),
+        BackgroundTransparency = 1,
+        Parent = self.MainFrame
+    })
+    
+    self.Tabs = {}
+    self.ActiveTab = nil
+
+    -- 动画进入
+    self:Open()
+    
+    return self
+end
+
+-- 辅助函数：创建控制按钮
+function Window:createControlButton(text, color, parent)
+    local button = createBase("TextButton", {
+        Text = text,
+        Font = Enum.Font.SourceSansBold,
+        TextSize = 18,
+        TextColor3 = Color3.fromRGB(255, 255, 255),
+        BackgroundColor3 = color,
+        Size = UDim2.new(0, 30, 0, 20),
+        BorderSizePixel = 0,
+        Parent = parent
+    })
+    createBase("UICorner", { CornerRadius = UDim2.new(0, 5), Parent = button })
+
+    -- 悬停动画
+    button.MouseEnter:Connect(function()
+        TweenService:Create(button, TWEEN_INFO_SLIGHT, { BackgroundTransparency = 0.2 }):Play()
+    end)
+    button.MouseLeave:Connect(function()
+        TweenService:Create(button, TWEEN_INFO_SLIGHT, { BackgroundTransparency = 0 }):Play()
+    end)
+
+    return button
+end
+
+-- 窗口拖拽
+function Window:MakeDraggable(titleBar)
+    local drag = false
+    local dragStart = Vector2.new(0, 0)
+    local startPos = UDim2.new(0, 0, 0, 0)
+
+    titleBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            drag = true
+            dragStart = input.Position
+            startPos = self.MainFrame.Position
+            input.Changed:Wait()
+        end
+    end)
+
+    game:GetService("UserInputService").InputChanged:Connect(function(input)
+        if drag and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local delta = input.Position - dragStart
+            local newX = startPos.X.Offset + delta.X
+            local newY = startPos.Y.Offset + delta.Y
+            self.MainFrame.Position = UDim2.new(startPos.X.Scale, newX, startPos.Y.Scale, newY)
+        end
+    end)
+
+    game:GetService("UserInputService").InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            drag = false
+        end
+    end)
+end
+
+-- 窗口打开动画
+function Window:Open()
+    self.MainFrame.Visible = true
+    TweenService:Create(self.MainFrame, TWEEN_INFO_NORMAL, {
+        Position = UDim2.new(0.5, 0, 0.5, 0),
+        Size = self.OriginalSize
+    }):Play()
+    self.IsMinimized = false
+end
+
+-- 窗口关闭动画
+function Window:Close()
+    TweenService:Create(self.MainFrame, TWEEN_INFO_NORMAL, {
+        Position = UDim2.new(0.5, 0, -1, 0),
+        BackgroundTransparency = 1,
+        Size = UDim2.new(0.1, 0, 0.1, 0)
+    }):Play()
+    task.wait(TWEEN_INFO_NORMAL.Time)
+    self.ScreenGui:Destroy()
+end
+
+-- 窗口最小化/最大化动画
+function Window:Minimize()
+    if not self.IsMinimized then
+        -- 最小化
+        TweenService:Create(self.MainFrame, TWEEN_INFO_NORMAL, {
+            Size = UDim2.new(0.2, 0, 0.05, 0),
+            Position = UDim2.new(0.05, 0, 0.95, 0),
+            AnchorPoint = Vector2.new(0, 1)
+        }):Play()
+
+        self.TabContainer.Visible = false
+        self.PageContainer.Visible = false
+        self.IsMinimized = true
+        self.MinimizeButton.Text = "[]"
+    else
+        -- 最大化
+        TweenService:Create(self.MainFrame, TWEEN_INFO_NORMAL, {
+            Size = self.OriginalSize,
+            Position = self.OriginalPosition,
+            AnchorPoint = Vector2.new(0.5, 0.5)
+        }):Play()
+
+        self.TabContainer.Visible = true
+        self.PageContainer.Visible = true
+        self.IsMinimized = false
+        self.MinimizeButton.Text = "_"
+    end
+end
+
+--// ==================== Tab 类定义 ====================
+
+local Tab = {}
+Tab.__index = Tab
+
+function Window:Tab(config)
+    local tab = setmetatable({
+        Window = self,
+        Config = config
+    }, Tab)
+    
+    -- Tab 按钮
+    tab.Button = createBase("TextButton", {
+        Name = config.Title .. "Tab",
+        Text = config.Title,
+        Font = Enum.Font.SourceSansSemibold,
+        TextSize = 16,
+        TextColor3 = Color3.fromRGB(200, 200, 200),
+        BackgroundColor3 = Color3.fromRGB(50, 50, 60),
+        Size = UDim2.new(1, 0, 0, 40),
+        BorderSizePixel = 0,
+        AutoButtonColor = false,
+        LayoutOrder = #self.Tabs + 1,
+        Parent = self.TabContainer
+    })
+    
+    -- Tab 页面 (Page)
+    tab.Page = createBase("ScrollingFrame", {
+        Name = config.Title .. "Page",
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
+        CanvasSize = UDim2.new(0, 0, 0, 0), -- 初始不滚动，由内容决定
+        ScrollBarThickness = 6,
+        Visible = false,
+        Parent = self.PageContainer
+    })
+    
+    createBase("UIListLayout", { -- 页面内容布局
+        Padding = UDim.new(0, 10),
+        FillDirection = Enum.FillDirection.Vertical,
+        HorizontalAlignment = Enum.HorizontalAlignment.Left,
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Parent = tab.Page
+    })
+
+    tab.Button.MouseButton1Click:Connect(function()
+        self:SwitchTab(tab)
+    end)
+
+    self.Tabs[config.Title] = tab
+    if not self.ActiveTab then
+        self:SwitchTab(tab) -- 默认激活第一个 Tab
+    end
+    
+    return tab
+end
+
+-- Tab 切换逻辑 (带有过渡动画)
+function Window:SwitchTab(newTab)
+    if self.ActiveTab == newTab then return end
+
+    -- 隐藏当前 Tab (淡出)
+    if self.ActiveTab then
+        local oldTab = self.ActiveTab
+        TweenService:Create(oldTab.Button, TWEEN_INFO_SLIGHT, {
+            BackgroundColor3 = Color3.fromRGB(50, 50, 60),
+            TextColor3 = Color3.fromRGB(200, 200, 200)
+        }):Play()
+
+        TweenService:Create(oldTab.Page, TWEEN_INFO_SLIGHT, {
+            BackgroundTransparency = 1,
+            CanvasGroupTransparency = 1,
+        }):Play()
+        task.wait(TWEEN_INFO_SLIGHT.Time)
+        oldTab.Page.Visible = false
+    end
+
+    -- 显示新 Tab (淡入)
+    self.ActiveTab = newTab
+    newTab.Page.Visible = true
+    newTab.Page.CanvasGroupTransparency = 1 -- 初始透明
+    
+    -- 按钮高亮
+    TweenService:Create(newTab.Button, TWEEN_INFO_SLIGHT, {
+        BackgroundColor3 = Color3.fromRGB(60, 60, 70),
+        TextColor3 = Color3.fromRGB(255, 255, 255)
+    }):Play()
+
+    -- 页面淡入
+    TweenService:Create(newTab.Page, TWEEN_INFO_SLIGHT, {
+        CanvasGroupTransparency = 0,
+    }):Play()
+end
+
+
+--// ==================== 组件通用辅助函数 ====================
+
+local function createComponentFrame(parent, title, desc)
+    local frame = createBase("Frame", {
+        Size = UDim2.new(1, -20, 0, 60),
+        Position = UDim2.new(0, 0, 0, 0), -- 留给 UIListLayout 自动定位
+        BackgroundColor3 = Color3.fromRGB(45, 45, 55),
+        BorderSizePixel = 0,
+        Parent = parent
+    })
+    
+    createBase("UICorner", { CornerRadius = UDim2.new(0, 5), Parent = frame })
+    
+    -- 标题
+    createBase("TextLabel", {
+        Name = "TitleLabel",
+        Text = title,
+        Font = Enum.Font.GothamMedium,
+        TextSize = 16,
+        TextColor3 = Color3.fromRGB(255, 255, 255),
+        BackgroundTransparency = 1,
+        Size = UDim2.new(0.6, 0, 0.4, 0),
+        Position = UDim2.new(0, 10, 0, 5),
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = frame
+    })
+    
+    -- 描述
+    createBase("TextLabel", {
+        Name = "DescLabel",
+        Text = desc,
+        Font = Enum.Font.SourceSans,
+        TextSize = 12,
+        TextColor3 = Color3.fromRGB(180, 180, 180),
+        BackgroundTransparency = 1,
+        Size = UDim2.new(0.6, 0, 0.4, 0),
+        Position = UDim2.new(0, 10, 0.4, 0),
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = frame
+    })
+    
+    return frame
+end
+
+
+--// ==================== Button 组件 ====================
+
+function Tab:Button(config)
+    local componentFrame = createComponentFrame(self.Page, config.Title, config.Desc)
+    componentFrame.Size = UDim2.new(1, -20, 0, 50) -- 按钮尺寸可以小一点
+    
+    local button = createBase("TextButton", {
+        Text = "执行",
+        Font = Enum.Font.SourceSansBold,
+        TextSize = 16,
+        TextColor3 = Color3.fromRGB(255, 255, 255),
+        BackgroundColor3 = Color3.fromRGB(50, 150, 80), -- 绿色
+        Size = UDim2.new(0.25, 0, 0.7, 0),
+        Position = UDim2.new(0.7, 0, 0.15, 0),
+        BorderSizePixel = 0,
+        Parent = componentFrame
+    })
+    
+    createBase("UICorner", { CornerRadius = UDim2.new(0, 5), Parent = button })
+
+    -- 按钮点击动画和回调
+    button.MouseButton1Click:Connect(function()
+        if not config.Locked and config.Callback then
+            -- 按钮点击反馈动画 (缩小)
+            local oldSize = button.Size
+            TweenService:Create(button, TWEEN_INFO_SLIGHT, { Size = UDim2.new(0.2, 0, 0.6, 0) }):Play()
+            task.delay(TWEEN_INFO_SLIGHT.Time, function()
+                TweenService:Create(button, TWEEN_INFO_SLIGHT, { Size = oldSize }):Play()
+            end)
+            
+            pcall(config.Callback) -- 执行回调函数
+        end
+    end)
+    
+    return button
+end
+
+--// ==================== Toggle 组件 (开关) ====================
+
+function Tab:Toggle(config)
+    local componentFrame = createComponentFrame(self.Page, config.Title, config.Desc)
+    local isActive = config.Default or false
+
+    -- 开关轨道 (Track)
+    local Track = createBase("Frame", {
+        Size = UDim2.new(0, 45, 0, 25),
+        Position = UDim2.new(0.75, 0, 0.5, 0),
+        AnchorPoint = Vector2.new(0, 0.5),
+        BackgroundColor3 = isActive and Color3.fromRGB(50, 150, 80) or Color3.fromRGB(100, 100, 100),
+        BorderSizePixel = 0,
+        Parent = componentFrame
+    })
+    createBase("UICorner", { CornerRadius = UDim2.new(0.5, 0), Parent = Track })
+    
+    -- 开关滑块 (Handle)
+    local Handle = createBase("Frame", {
+        Size = UDim2.new(0, 20, 0, 20),
+        Position = isActive and UDim2.new(1, -22.5, 0.5, 0) or UDim2.new(0, 2.5, 0.5, 0),
+        AnchorPoint = Vector2.new(0, 0.5),
+        BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+        BorderSizePixel = 0,
+        Parent = Track
+    })
+    createBase("UICorner", { CornerRadius = UDim2.new(0.5, 0), Parent = Handle })
+
+    local function updateToggle(state)
+        isActive = state
+        
+        local newTrackColor = state and Color3.fromRGB(50, 150, 80) or Color3.fromRGB(100, 100, 100)
+        local newHandlePos = state and UDim2.new(1, -22.5, 0.5, 0) or UDim2.new(0, 2.5, 0.5, 0)
+
+        -- 动画更新
+        TweenService:Create(Track, TWEEN_INFO_SLIGHT, { BackgroundColor3 = newTrackColor }):Play()
+        TweenService:Create(Handle, TWEEN_INFO_SLIGHT, { Position = newHandlePos }):Play()
+        
+        if config.Callback then
+            pcall(config.Callback, state)
+        end
+    end
+    
+    Track.MouseButton1Click:Connect(function()
+        if not config.Locked then
+            updateToggle(not isActive)
+        end
+    end)
+    
+    return {
+        Frame = componentFrame,
+        IsEnabled = function() return isActive end,
+        Set = updateToggle,
+    }
+end
+
+--// ==================== Label 组件 (信息标签) ====================
+
+function Tab:Label(config)
+    local componentFrame = createBase("Frame", {
+        Size = UDim2.new(1, -20, 0, 30),
+        Position = UDim2.new(0, 0, 0, 0),
+        BackgroundColor3 = Color3.fromRGB(50, 50, 60),
+        BorderSizePixel = 0,
+        Parent = self.Page
+    })
+    
+    createBase("UICorner", { CornerRadius = UDim2.new(0, 5), Parent = componentFrame })
+
+    local Label = createBase("TextLabel", {
+        Name = "InfoLabel",
+        Text = config.Text or "",
+        Font = Enum.Font.GothamMedium,
+        TextSize = 15,
+        TextColor3 = config.Color or Color3.fromRGB(255, 255, 255),
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 1, 0),
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Position = UDim2.new(0, 10, 0, 0),
+        Parent = componentFrame
+    })
+
+    return {
+        Frame = componentFrame,
+        SetText = function(newText)
+            Label.Text = newText
+        end
+    }
+end
+
+
+--// ==================== Slider 组件 (滑块) ====================
+
+function Tab:Slider(config)
+    local componentFrame = createComponentFrame(self.Page, config.Title, config.Desc)
+    componentFrame.Size = UDim2.new(1, -20, 0, 80) -- 滑块需要更多垂直空间
+
+    local MinValue = config.Min or 0
+    local MaxValue = config.Max or 100
+    local InitialValue = config.Default or MinValue
+    local Step = config.Step or 1
+    
+    local CurrentValue = InitialValue
+
+    -- 显示当前值的标签
+    local ValueLabel = createBase("TextLabel", {
+        Name = "ValueLabel",
+        Text = string.format("%s: %.0f", config.Unit or "值", CurrentValue),
+        Font = Enum.Font.SourceSansBold,
+        TextSize = 14,
+        TextColor3 = Color3.fromRGB(255, 255, 255),
+        BackgroundTransparency = 1,
+        Size = UDim2.new(0.3, 0, 0.4, 0),
+        Position = UDim2.new(0.65, 0, 0.05, 0),
+        TextXAlignment = Enum.TextXAlignment.Right,
+        Parent = componentFrame
+    })
+
+    -- 滑块轨道 (Track)
+    local Track = createBase("Frame", {
+        Size = UDim2.new(0.8, 0, 0, 8),
+        Position = UDim2.new(0.5, 0, 0.7, 0),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        BackgroundColor3 = Color3.fromRGB(55, 55, 65),
+        BorderSizePixel = 0,
+        Parent = componentFrame
+    })
+    createBase("UICorner", { CornerRadius = UDim2.new(0.5, 0), Parent = Track })
+
+    -- 进度填充条 (Fill)
+    local Fill = createBase("Frame", {
+        Size = UDim2.new(0, 0, 1, 0), -- 初始宽度为0
+        BackgroundColor3 = Color3.fromRGB(80, 150, 255),
+        BorderSizePixel = 0,
+        Parent = Track
+    })
+    createBase("UICorner", { CornerRadius = UDim2.new(0.5, 0), Parent = Fill })
+
+    -- 滑块拖动块 (Handle)
+    local Handle = createBase("Frame", {
+        Size = UDim2.new(0, 16, 0, 16),
+        Position = UDim2.new(0, 0, 0.5, 0),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+        BorderSizePixel = 0,
+        Parent = Track
+    })
+    createBase("UICorner", { CornerRadius = UDim2.new(0.5, 0), Parent = Handle })
+
+    local isDragging = false
+
+    local function updateSlider(value)
+        -- 1. 确保值在范围内并符合步长
+        local clampedValue = math.max(MinValue, math.min(MaxValue, value))
+        local snappedValue = math.round(clampedValue / Step) * Step
+        
+        CurrentValue = snappedValue
+        
+        -- 2. 计算 Handle 的位置 (0-1 范围)
+        local range = MaxValue - MinValue
+        local fraction = (CurrentValue - MinValue) / range
+        local handleX = math.clamp(fraction, 0, 1)
+
+        -- 3. 动画更新 UI
+        local newFillSize = UDim2.new(handleX, 0, 1, 0)
+        local newHandlePos = UDim2.new(handleX, 0, 0.5, 0)
+
+        TweenService:Create(Fill, TWEEN_INFO_SLIGHT, { Size = newFillSize }):Play()
+        TweenService:Create(Handle, TWEEN_INFO_SLIGHT, { Position = newHandlePos }):Play()
+
+        -- 4. 更新值标签
+        ValueLabel.Text = string.format("%s: %.0f", config.Unit or "值", CurrentValue)
+
+        -- 5. 执行回调函数
+        if config.Callback then
+            pcall(config.Callback, CurrentValue)
+        end
+    end
+
+    local function startDrag(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            isDragging = true
+        end
+    end
+
+    local function processDrag(input)
+        if isDragging then
+            local xOffset = input.Position.X - Track.AbsolutePosition.X
+            local percent = xOffset / Track.AbsoluteSize.X
+            
+            local newValue = MinValue + (MaxValue - MinValue) * percent
+            updateSlider(newValue)
+        end
+    end
+
+    local function endDrag(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            isDragging = false
+        end
+    end
+    
+    Track.InputBegan:Connect(startDrag)
+    Handle.InputBegan:Connect(startDrag)
+    
+    game:GetService("UserInputService").InputChanged:Connect(processDrag)
+    game:GetService("UserInputService").InputEnded:Connect(endDrag)
+    
+    -- 初始设置值
+    updateSlider(InitialValue)
+
+    return {
+        Frame = componentFrame,
+        GetValue = function() return CurrentValue end,
+        Set = updateSlider,
+    }
+end
+
+
+--// ==================== 暴露接口 ====================
+
+function UIFramework:CreateWindow(title)
+    return Window.new(title)
+end
+
+return UIFramework
