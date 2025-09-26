@@ -1,9 +1,9 @@
 -- 自定义 Roblox UI 库 (HM-UI)
--- 功能：支持窗口、选项卡、按钮和开关，带玻璃质感与流畅过渡动画
+-- 功能：支持窗口、选项卡、按钮、开关、滑块、输入框，带最小化/最大化/关闭按钮及过渡动画
 -- 作者：Grok（基于用户需求生成）
--- 版本：2.2
+-- 版本：2.4
 -- 日期：2025-09-27
--- 说明：修复 Notify 方法调用问题，优化 UIBlurEffect 兼容性
+-- 说明：新增最小化、最大化、关闭按钮，使用代码绘制圆润图形，包含过渡动画
 
 local CustomUILibrary = {}
 
@@ -30,7 +30,6 @@ local function applyBlur(parent, window)
     else
         parent.BackgroundTransparency = 0.3
         warn("UIBlurEffect 不可用，已使用透明背景替代。")
-        -- 仅在 window 已创建时通知
         if window and window.Notify then
             window:Notify({
                 Title = "兼容性提示",
@@ -41,10 +40,25 @@ local function applyBlur(parent, window)
     end
 end
 
+-- 工具函数：绘制圆形按钮
+local function drawCircularButton(parent, size, color, strokeColor)
+    local button = Instance.new("Frame")
+    button.Size = UDim2.new(0, size, 0, size)
+    button.BackgroundColor3 = color
+    applyCorner(button, size / 2)
+    local stroke = Instance.new("UIStroke")
+    stroke.Thickness = 2
+    stroke.Color = strokeColor
+    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    stroke.Parent = button
+    button.Parent = parent
+    return button
+end
+
 -- 通知方法（全局定义）
 function CustomUILibrary:Notify(notifyConfig)
-    local window = self -- 获取当前窗口上下文
-    if not window or not window.screenGui then return end -- 防止空引用
+    local window = self
+    if not window or not window.screenGui then return end
 
     local notifyFrame = Instance.new("Frame")
     notifyFrame.Size = UDim2.new(0, 250, 0, 80)
@@ -95,13 +109,15 @@ function CustomUILibrary:CreateWindow(config)
     window.SubTitle = config.SubTitle or "欢迎使用"
     window.Size = config.Size or UDim2.new(0, 600, 0, 400)
     window.Theme = config.Theme or "Dark"
+    window.IsMinimized = false
+    window.IsMaximized = false
 
     -- 创建主 ScreenGui
     local screenGui = Instance.new("ScreenGui")
     screenGui.Name = "HMUILibrary"
     screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
     screenGui.ResetOnSpawn = false
-    window.screenGui = screenGui -- 存储 ScreenGui 引用
+    window.screenGui = screenGui
 
     -- 主窗口框架
     local mainFrame = Instance.new("Frame")
@@ -129,7 +145,7 @@ function CustomUILibrary:CreateWindow(config)
     titleBar.Parent = mainFrame
 
     local titleLabel = Instance.new("TextLabel")
-    titleLabel.Size = UDim2.new(1, -10, 1, 0)
+    titleLabel.Size = UDim2.new(1, -120, 1, 0) -- 留出按钮空间
     titleLabel.Position = UDim2.new(0, 10, 0, 0)
     titleLabel.Text = window.Title .. " - " .. window.SubTitle
     titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -138,6 +154,78 @@ function CustomUILibrary:CreateWindow(config)
     titleLabel.Font = Enum.Font.GothamBold
     titleLabel.TextXAlignment = Enum.TextXAlignment.Left
     titleLabel.Parent = titleBar
+
+    -- 窗口控制按钮容器
+    local buttonContainer = Instance.new("Frame")
+    buttonContainer.Size = UDim2.new(0, 100, 1, 0)
+    buttonContainer.Position = UDim2.new(1, -110, 0, 0)
+    buttonContainer.BackgroundTransparency = 1
+    buttonContainer.Parent = titleBar
+
+    local buttonLayout = Instance.new("UIListLayout")
+    buttonLayout.FillDirection = Enum.FillDirection.Horizontal
+    buttonLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+    buttonLayout.Padding = UDim.new(0, 5)
+    buttonLayout.Parent = buttonContainer
+
+    -- 最小化按钮
+    local minimizeButton = drawCircularButton(buttonContainer, 20, Color3.fromRGB(200, 200, 0), Color3.fromRGB(150, 150, 0))
+    local minimizeLine = Instance.new("Frame")
+    minimizeLine.Size = UDim2.new(0, 10, 0, 2)
+    minimizeLine.Position = UDim2.new(0.5, -5, 0.5, -1)
+    minimizeLine.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    minimizeLine.Parent = minimizeButton
+    minimizeButton.MouseButton1Click:Connect(function()
+        if not window.IsMinimized then
+            TweenService:Create(mainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {Size = UDim2.new(0, 200, 0, 40)}):Play()
+            window.IsMinimized = true
+            TweenService:Create(minimizeButton, TweenInfo.new(0.3), {BackgroundColor3 = Color3.fromRGB(150, 150, 0)}):Play()
+        else
+            TweenService:Create(mainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {Size = window.Size}):Play()
+            window.IsMinimized = false
+            TweenService:Create(minimizeButton, TweenInfo.new(0.3), {BackgroundColor3 = Color3.fromRGB(200, 200, 0)}):Play()
+        end
+    end)
+
+    -- 最大化/还原按钮
+    local maximizeButton = drawCircularButton(buttonContainer, 20, Color3.fromRGB(0, 200, 0), Color3.fromRGB(0, 150, 0))
+    local maximizeSquare = Instance.new("Frame")
+    maximizeSquare.Size = UDim2.new(0, 12, 0, 12)
+    maximizeSquare.Position = UDim2.new(0.5, -6, 0.5, -6)
+    maximizeSquare.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    applyCorner(maximizeSquare, 2)
+    maximizeSquare.Parent = maximizeButton
+    maximizeButton.MouseButton1Click:Connect(function()
+        if not window.IsMaximized then
+            TweenService:Create(mainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {Size = UDim2.new(0, 800, 0, 500)}):Play()
+            window.IsMaximized = true
+            TweenService:Create(maximizeButton, TweenInfo.new(0.3), {BackgroundColor3 = Color3.fromRGB(0, 150, 0)}):Play()
+        else
+            TweenService:Create(mainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {Size = window.Size}):Play()
+            window.IsMaximized = false
+            TweenService:Create(maximizeButton, TweenInfo.new(0.3), {BackgroundColor3 = Color3.fromRGB(0, 200, 0)}):Play()
+        end
+    end)
+
+    -- 关闭按钮
+    local closeButton = drawCircularButton(buttonContainer, 20, Color3.fromRGB(200, 0, 0), Color3.fromRGB(150, 0, 0))
+    local closeX1 = Instance.new("Frame")
+    closeX1.Size = UDim2.new(0, 10, 0, 2)
+    closeX1.Position = UDim2.new(0.5, -5, 0.5, -5)
+    closeX1.Rotation = 45
+    closeX1.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    closeX1.Parent = closeButton
+    local closeX2 = Instance.new("Frame")
+    closeX2.Size = UDim2.new(0, 10, 0, 2)
+    closeX2.Position = UDim2.new(0.5, -5, 0.5, -5)
+    closeX2.Rotation = -45
+    closeX2.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    closeX2.Parent = closeButton
+    closeButton.MouseButton1Click:Connect(function()
+        TweenService:Create(mainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {Size = UDim2.new(0, 0, 0, 0)}):Play()
+        wait(0.3)
+        screenGui:Destroy()
+    end)
 
     -- 选项卡容器
     local tabContainer = Instance.new("Frame")
@@ -176,7 +264,6 @@ function CustomUILibrary:CreateWindow(config)
         tab.Locked = tabConfig.Locked or false
         tab.Default = tabConfig.Default or false
 
-        -- 选项卡按钮
         local tabButton = Instance.new("TextButton")
         tabButton.Size = UDim2.new(1, -10, 0, 45)
         tabButton.Position = UDim2.new(0, 5, 0, 0)
@@ -189,7 +276,6 @@ function CustomUILibrary:CreateWindow(config)
         applyCorner(tabButton, 6)
         tabButton.Parent = tabContainer
 
-        -- 选项卡内容框架
         local tabContent = Instance.new("Frame")
         tabContent.Size = UDim2.new(1, 0, 1, 0)
         tabContent.BackgroundTransparency = 1
@@ -201,7 +287,6 @@ function CustomUILibrary:CreateWindow(config)
         contentListLayout.Padding = UDim.new(0, 8)
         contentListLayout.Parent = tabContent
 
-        -- 选项卡切换动画
         tabButton.MouseButton1Click:Connect(function()
             if tab.Locked then
                 self:Notify({
@@ -221,7 +306,6 @@ function CustomUILibrary:CreateWindow(config)
             window.CurrentTab = tab
         end)
 
-        -- 按钮组件
         function tab:Button(buttonConfig)
             local button = {}
             button.Title = buttonConfig.Title or "按钮"
@@ -257,7 +341,6 @@ function CustomUILibrary:CreateWindow(config)
             descLabel.Font = Enum.Font.Gotham
             descLabel.Parent = buttonFrame
 
-            -- 按钮点击动画
             buttonElement.MouseButton1Click:Connect(function()
                 if button.Locked then
                     self:Notify({
@@ -278,7 +361,6 @@ function CustomUILibrary:CreateWindow(config)
             return button
         end
 
-        -- 开关组件
         function tab:Toggle(toggleConfig)
             local toggle = {}
             toggle.Title = toggleConfig.Title or "开关"
@@ -322,7 +404,6 @@ function CustomUILibrary:CreateWindow(config)
             descLabel.Font = Enum.Font.Gotham
             descLabel.Parent = toggleFrame
 
-            -- 开关切换动画
             toggleButton.MouseButton1Click:Connect(function()
                 if toggle.Locked then
                     self:Notify({
@@ -343,6 +424,141 @@ function CustomUILibrary:CreateWindow(config)
             return toggle
         end
 
+        function tab:Slider(sliderConfig)
+            local slider = {}
+            slider.Title = sliderConfig.Title or "滑块"
+            slider.Min = sliderConfig.Min or 0
+            slider.Max = sliderConfig.Max or 100
+            slider.Default = sliderConfig.Default or 50
+            slider.Step = sliderConfig.Step or 1
+            slider.Callback = sliderConfig.Callback or function(value) end
+
+            local sliderFrame = Instance.new("Frame")
+            sliderFrame.Size = UDim2.new(1, -20, 0, 60)
+            sliderFrame.Position = UDim2.new(0, 10, 0, 0)
+            sliderFrame.BackgroundTransparency = 1
+            sliderFrame.Parent = tabContent
+
+            local titleLabel = Instance.new("TextLabel")
+            titleLabel.Size = UDim2.new(1, 0, 0, 20)
+            titleLabel.BackgroundTransparency = 1
+            titleLabel.Text = slider.Title
+            titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+            titleLabel.TextSize = 14
+            titleLabel.Font = Enum.Font.Gotham
+            titleLabel.Parent = sliderFrame
+
+            local sliderBar = Instance.new("Frame")
+            sliderBar.Size = UDim2.new(1, 0, 0, 10)
+            sliderBar.Position = UDim2.new(0, 0, 0, 25)
+            sliderBar.BackgroundColor3 = window.Theme == "Dark" and Color3.fromRGB(60, 60, 60) or Color3.fromRGB(180, 180, 180)
+            sliderBar.BackgroundTransparency = 0.5
+            applyCorner(sliderBar, 5)
+            sliderBar.Parent = sliderFrame
+
+            local sliderFill = Instance.new("Frame")
+            sliderFill.Size = UDim2.new(0, 0, 1, 0) -- 初始宽度为 0
+            sliderFill.BackgroundColor3 = window.Theme == "Dark" and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(0, 200, 0)
+            applyCorner(sliderFill, 5)
+            sliderFill.Parent = sliderBar
+
+            local sliderKnob = Instance.new("Frame")
+            sliderKnob.Size = UDim2.new(0, 20, 0, 20)
+            sliderKnob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            applyCorner(sliderKnob, 10)
+            sliderKnob.Parent = sliderBar
+
+            local valueLabel = Instance.new("TextLabel")
+            valueLabel.Size = UDim2.new(0, 50, 0, 20)
+            valueLabel.Position = UDim2.new(1, -60, 0, 25)
+            valueLabel.BackgroundTransparency = 1
+            valueLabel.Text = tostring(slider.Default)
+            valueLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+            valueLabel.TextSize = 12
+            valueLabel.Font = Enum.Font.Gotham
+            valueLabel.Parent = sliderFrame
+
+            local function updateSlider(value)
+                local percentage = (value - slider.Min) / (slider.Max - slider.Min)
+                local barWidth = sliderBar.AbsoluteSize.X
+                sliderFill.Size = UDim2.new(0, percentage * barWidth, 1, 0)
+                sliderKnob.Position = UDim2.new(percentage, -10, 0.5, -10)
+                valueLabel.Text = tostring(math.floor(value))
+                slider.Callback(value)
+            end
+
+            updateSlider(slider.Default)
+
+            sliderKnob.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                    local dragging = true
+                    local startPos = UserInputService:GetMouseLocation().X
+                    local startValue = slider.Default
+
+                    local function update()
+                        if dragging then
+                            local delta = (UserInputService:GetMouseLocation().X - startPos) / sliderBar.AbsoluteSize.X * (slider.Max - slider.Min)
+                            local newValue = math.clamp(startValue + delta, slider.Min, slider.Max)
+                            newValue = math.floor(newValue / slider.Step) * slider.Step
+                            updateSlider(newValue)
+                        end
+                    end
+
+                    UserInputService.InputChanged:Connect(update)
+                    sliderKnob.InputEnded:Connect(function(input)
+                        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                            dragging = false
+                        end
+                    end)
+                end
+            end)
+
+            return slider
+        end
+
+        function tab:TextBox(textBoxConfig)
+            local textBox = {}
+            textBox.Title = textBoxConfig.Title or "输入框"
+            textBox.Placeholder = textBoxConfig.Placeholder or "输入内容..."
+            textBox.Callback = textBoxConfig.Callback or function(text) end
+
+            local textBoxFrame = Instance.new("Frame")
+            textBoxFrame.Size = UDim2.new(1, -20, 0, 60)
+            textBoxFrame.Position = UDim2.new(0, 10, 0, 0)
+            textBoxFrame.BackgroundTransparency = 1
+            textBoxFrame.Parent = tabContent
+
+            local titleLabel = Instance.new("TextLabel")
+            titleLabel.Size = UDim2.new(1, 0, 0, 20)
+            titleLabel.BackgroundTransparency = 1
+            titleLabel.Text = textBox.Title
+            titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+            titleLabel.TextSize = 14
+            titleLabel.Font = Enum.Font.Gotham
+            titleLabel.Parent = textBoxFrame
+
+            local textBoxElement = Instance.new("TextBox")
+            textBoxElement.Size = UDim2.new(1, 0, 0, 30)
+            textBoxElement.Position = UDim2.new(0, 0, 0, 25)
+            textBoxElement.BackgroundColor3 = window.Theme == "Dark" and Color3.fromRGB(50, 50, 50) or Color3.fromRGB(170, 170, 170)
+            textBoxElement.BackgroundTransparency = 0.5
+            textBoxElement.Text = ""
+            textBoxElement.PlaceholderText = textBox.Placeholder
+            textBoxElement.TextColor3 = Color3.fromRGB(255, 255, 255)
+            textBoxElement.TextSize = 14
+            textBoxElement.Font = Enum.Font.Gotham
+            applyCorner(textBoxElement, 6)
+            textBoxElement.Parent = textBoxFrame
+
+            textBoxElement.FocusLost:Connect(function(enterPressed)
+                if enterPressed then
+                    textBox.Callback(textBoxElement.Text)
+                end
+            end)
+
+            return textBox
+        end
+
         tab.Button = tabButton
         tab.Content = tabContent
         table.insert(window.Tabs, tab)
@@ -353,7 +569,7 @@ function CustomUILibrary:CreateWindow(config)
         return tab
     end
 
-    setmetatable(window, { __index = CustomUILibrary }) -- 确保 window 继承 Notify 方法
+    setmetatable(window, { __index = CustomUILibrary })
     return window
 end
 
