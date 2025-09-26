@@ -1,9 +1,9 @@
 -- 自定义 Roblox UI 库 (HM-UI)
 -- 功能：支持窗口、选项卡、按钮和开关，带玻璃质感与流畅过渡动画
 -- 作者：Grok（基于用户需求生成）
--- 版本：2.1
+-- 版本：2.2
 -- 日期：2025-09-27
--- 说明：包含 UIBlurEffect 兼容性检查，回退至透明背景
+-- 说明：修复 Notify 方法调用问题，优化 UIBlurEffect 兼容性
 
 local CustomUILibrary = {}
 
@@ -19,7 +19,7 @@ local function applyCorner(instance, radius)
 end
 
 -- 工具函数：创建玻璃质感模糊效果（带兼容性检查）
-local function applyBlur(parent)
+local function applyBlur(parent, window)
     local success, result = pcall(function()
         return Instance.new("UIBlurEffect")
     end)
@@ -30,12 +30,62 @@ local function applyBlur(parent)
     else
         parent.BackgroundTransparency = 0.3
         warn("UIBlurEffect 不可用，已使用透明背景替代。")
-        CustomUILibrary:Notify({
-            Title = "兼容性提示",
-            Content = "当前环境不支持模糊效果，已切换至透明背景。",
-            Duration = 5
-        })
+        -- 仅在 window 已创建时通知
+        if window and window.Notify then
+            window:Notify({
+                Title = "兼容性提示",
+                Content = "当前环境不支持模糊效果，已切换至透明背景。",
+                Duration = 5
+            })
+        end
     end
+end
+
+-- 通知方法（全局定义）
+function CustomUILibrary:Notify(notifyConfig)
+    local window = self -- 获取当前窗口上下文
+    if not window or not window.screenGui then return end -- 防止空引用
+
+    local notifyFrame = Instance.new("Frame")
+    notifyFrame.Size = UDim2.new(0, 250, 0, 80)
+    notifyFrame.Position = UDim2.new(1, -260, 1, -90)
+    notifyFrame.BackgroundColor3 = window.Theme == "Dark" and Color3.fromRGB(20, 20, 20) or Color3.fromRGB(220, 220, 220)
+    notifyFrame.BackgroundTransparency = 0.2
+    applyCorner(notifyFrame, 8)
+    applyBlur(notifyFrame, window)
+    notifyFrame.Parent = window.screenGui
+
+    local notifyTitle = Instance.new("TextLabel")
+    notifyTitle.Size = UDim2.new(1, -10, 0, 25)
+    notifyTitle.Position = UDim2.new(0, 5, 0, 5)
+    notifyTitle.Text = notifyConfig.Title or "通知"
+    notifyTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+    notifyTitle.BackgroundTransparency = 1
+    notifyTitle.TextSize = 16
+    notifyTitle.Font = Enum.Font.GothamBold
+    notifyTitle.Parent = notifyFrame
+
+    local notifyContent = Instance.new("TextLabel")
+    notifyContent.Size = UDim2.new(1, -10, 0, 45)
+    notifyContent.Position = UDim2.new(0, 5, 0, 30)
+    notifyContent.Text = notifyConfig.Content or ""
+    notifyContent.TextColor3 = Color3.fromRGB(200, 200, 200)
+    notifyContent.BackgroundTransparency = 1
+    notifyContent.TextSize = 12
+    notifyContent.Font = Enum.Font.Gotham
+    notifyContent.TextWrapped = true
+    notifyContent.Parent = notifyFrame
+
+    -- 通知动画
+    notifyFrame.Position = UDim2.new(1, 0, 1, -90)
+    local tweenIn = TweenService:Create(notifyFrame, TweenInfo.new(0.5, Enum.EasingStyle.Quad), {Position = UDim2.new(1, -260, 1, -90)})
+    tweenIn:Play()
+    wait(notifyConfig.Duration or 3)
+    local tweenOut = TweenService:Create(notifyFrame, TweenInfo.new(0.5, Enum.EasingStyle.Quad), {Position = UDim2.new(1, 0, 1, -90)})
+    tweenOut:Play()
+    tweenOut.Completed:Connect(function()
+        notifyFrame:Destroy()
+    end)
 end
 
 -- 主 UI 库：创建窗口
@@ -51,6 +101,7 @@ function CustomUILibrary:CreateWindow(config)
     screenGui.Name = "HMUILibrary"
     screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
     screenGui.ResetOnSpawn = false
+    window.screenGui = screenGui -- 存储 ScreenGui 引用
 
     -- 主窗口框架
     local mainFrame = Instance.new("Frame")
@@ -61,7 +112,7 @@ function CustomUILibrary:CreateWindow(config)
     mainFrame.BorderSizePixel = 0
     mainFrame.ClipsDescendants = true
     applyCorner(mainFrame, 12)
-    applyBlur(mainFrame)
+    applyBlur(mainFrame, window)
     mainFrame.Parent = screenGui
 
     -- 窗口出现动画
@@ -95,7 +146,7 @@ function CustomUILibrary:CreateWindow(config)
     tabContainer.BackgroundColor3 = window.Theme == "Dark" and Color3.fromRGB(25, 25, 25) or Color3.fromRGB(210, 210, 210)
     tabContainer.BackgroundTransparency = 0.3
     applyCorner(tabContainer, 8)
-    applyBlur(tabContainer)
+    applyBlur(tabContainer, window)
     tabContainer.Parent = mainFrame
 
     local tabListLayout = Instance.new("UIListLayout")
@@ -110,7 +161,7 @@ function CustomUILibrary:CreateWindow(config)
     contentFrame.BackgroundColor3 = window.Theme == "Dark" and Color3.fromRGB(30, 30, 30) or Color3.fromRGB(230, 230, 230)
     contentFrame.BackgroundTransparency = 0.3
     applyCorner(contentFrame, 8)
-    applyBlur(contentFrame)
+    applyBlur(contentFrame, window)
     contentFrame.Parent = mainFrame
 
     -- 存储选项卡
@@ -153,7 +204,7 @@ function CustomUILibrary:CreateWindow(config)
         -- 选项卡切换动画
         tabButton.MouseButton1Click:Connect(function()
             if tab.Locked then
-                CustomUILibrary:Notify({
+                self:Notify({
                     Title = "错误",
                     Content = "此选项卡已锁定！",
                     Duration = 3
@@ -209,7 +260,7 @@ function CustomUILibrary:CreateWindow(config)
             -- 按钮点击动画
             buttonElement.MouseButton1Click:Connect(function()
                 if button.Locked then
-                    CustomUILibrary:Notify({
+                    self:Notify({
                         Title = "错误",
                         Content = "此按钮已锁定！",
                         Duration = 3
@@ -274,7 +325,7 @@ function CustomUILibrary:CreateWindow(config)
             -- 开关切换动画
             toggleButton.MouseButton1Click:Connect(function()
                 if toggle.Locked then
-                    CustomUILibrary:Notify({
+                    self:Notify({
                         Title = "错误",
                         Content = "此开关已锁定！",
                         Duration = 3
@@ -302,50 +353,7 @@ function CustomUILibrary:CreateWindow(config)
         return tab
     end
 
-    -- 通知方法
-    function CustomUILibrary:Notify(notifyConfig)
-        local notifyFrame = Instance.new("Frame")
-        notifyFrame.Size = UDim2.new(0, 250, 0, 80)
-        notifyFrame.Position = UDim2.new(1, -260, 1, -90)
-        notifyFrame.BackgroundColor3 = window.Theme == "Dark" and Color3.fromRGB(20, 20, 20) or Color3.fromRGB(220, 220, 220)
-        notifyFrame.BackgroundTransparency = 0.2
-        applyCorner(notifyFrame, 8)
-        applyBlur(notifyFrame)
-        notifyFrame.Parent = screenGui
-
-        local notifyTitle = Instance.new("TextLabel")
-        notifyTitle.Size = UDim2.new(1, -10, 0, 25)
-        notifyTitle.Position = UDim2.new(0, 5, 0, 5)
-        notifyTitle.Text = notifyConfig.Title or "通知"
-        notifyTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-        notifyTitle.BackgroundTransparency = 1
-        notifyTitle.TextSize = 16
-        notifyTitle.Font = Enum.Font.GothamBold
-        notifyTitle.Parent = notifyFrame
-
-        local notifyContent = Instance.new("TextLabel")
-        notifyContent.Size = UDim2.new(1, -10, 0, 45)
-        notifyContent.Position = UDim2.new(0, 5, 0, 30)
-        notifyContent.Text = notifyConfig.Content or ""
-        notifyContent.TextColor3 = Color3.fromRGB(200, 200, 200)
-        notifyContent.BackgroundTransparency = 1
-        notifyContent.TextSize = 12
-        notifyContent.Font = Enum.Font.Gotham
-        notifyContent.TextWrapped = true
-        notifyContent.Parent = notifyFrame
-
-        -- 通知动画
-        notifyFrame.Position = UDim2.new(1, 0, 1, -90)
-        local tweenIn = TweenService:Create(notifyFrame, TweenInfo.new(0.5, Enum.EasingStyle.Quad), {Position = UDim2.new(1, -260, 1, -90)})
-        tweenIn:Play()
-        wait(notifyConfig.Duration or 3)
-        local tweenOut = TweenService:Create(notifyFrame, TweenInfo.new(0.5, Enum.EasingStyle.Quad), {Position = UDim2.new(1, 0, 1, -90)})
-        tweenOut:Play()
-        tweenOut.Completed:Connect(function()
-            notifyFrame:Destroy()
-        end)
-    end
-
+    setmetatable(window, { __index = CustomUILibrary }) -- 确保 window 继承 Notify 方法
     return window
 end
 
