@@ -1,7 +1,9 @@
--- 自定义 Roblox UI 库
--- 功能：支持窗口、选项卡、按钮、开关，带玻璃质感和流畅过渡动画
+-- 自定义 Roblox UI 库 (HM-UI)
+-- 功能：支持窗口、选项卡、按钮和开关，带玻璃质感与流畅过渡动画
 -- 作者：Grok（基于用户需求生成）
--- 版本：2.0
+-- 版本：2.1
+-- 日期：2025-09-27
+-- 说明：包含 UIBlurEffect 兼容性检查，回退至透明背景
 
 local CustomUILibrary = {}
 
@@ -16,31 +18,44 @@ local function applyCorner(instance, radius)
     corner.Parent = instance
 end
 
--- 工具函数：创建玻璃质感模糊效果
+-- 工具函数：创建玻璃质感模糊效果（带兼容性检查）
 local function applyBlur(parent)
-    local blur = Instance.new("UIBlurEffect")
-    blur.Size = 24
-    blur.Parent = parent
+    local success, result = pcall(function()
+        return Instance.new("UIBlurEffect")
+    end)
+    if success then
+        local blur = Instance.new("UIBlurEffect")
+        blur.Size = 24
+        blur.Parent = parent
+    else
+        parent.BackgroundTransparency = 0.3
+        warn("UIBlurEffect 不可用，已使用透明背景替代。")
+        CustomUILibrary:Notify({
+            Title = "兼容性提示",
+            Content = "当前环境不支持模糊效果，已切换至透明背景。",
+            Duration = 5
+        })
+    end
 end
 
 -- 主 UI 库：创建窗口
 function CustomUILibrary:CreateWindow(config)
     local window = {}
-    window.Title = config.Title or "自定义界面"
+    window.Title = config.Title or "HM-UI 界面"
     window.SubTitle = config.SubTitle or "欢迎使用"
     window.Size = config.Size or UDim2.new(0, 600, 0, 400)
     window.Theme = config.Theme or "Dark"
 
     -- 创建主 ScreenGui
     local screenGui = Instance.new("ScreenGui")
-    screenGui.Name = "CustomUILibrary"
+    screenGui.Name = "HMUILibrary"
     screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
     screenGui.ResetOnSpawn = false
 
     -- 主窗口框架
     local mainFrame = Instance.new("Frame")
     mainFrame.Size = window.Size
-    mainFrame.Position = UDim2.new(0.5, -window.Size.X.Offset / 2, 0.5, -window.Size.Y.Offset / 2)
+    mainFrame.Position = UDim2.new(0.5, -window.Size.X.Offset / 2, 0.5, 100) -- 初始位置用于动画
     mainFrame.BackgroundColor3 = window.Theme == "Dark" and Color3.fromRGB(20, 20, 20) or Color3.fromRGB(220, 220, 220)
     mainFrame.BackgroundTransparency = 0.1
     mainFrame.BorderSizePixel = 0
@@ -50,7 +65,6 @@ function CustomUILibrary:CreateWindow(config)
     mainFrame.Parent = screenGui
 
     -- 窗口出现动画
-    mainFrame.Position = UDim2.new(0.5, -window.Size.X.Offset / 2, 0.5, 100)
     TweenService:Create(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
         Position = UDim2.new(0.5, -window.Size.X.Offset / 2, 0.5, -window.Size.Y.Offset / 2)
     }):Play()
@@ -81,6 +95,7 @@ function CustomUILibrary:CreateWindow(config)
     tabContainer.BackgroundColor3 = window.Theme == "Dark" and Color3.fromRGB(25, 25, 25) or Color3.fromRGB(210, 210, 210)
     tabContainer.BackgroundTransparency = 0.3
     applyCorner(tabContainer, 8)
+    applyBlur(tabContainer)
     tabContainer.Parent = mainFrame
 
     local tabListLayout = Instance.new("UIListLayout")
@@ -95,6 +110,7 @@ function CustomUILibrary:CreateWindow(config)
     contentFrame.BackgroundColor3 = window.Theme == "Dark" and Color3.fromRGB(30, 30, 30) or Color3.fromRGB(230, 230, 230)
     contentFrame.BackgroundTransparency = 0.3
     applyCorner(contentFrame, 8)
+    applyBlur(contentFrame)
     contentFrame.Parent = mainFrame
 
     -- 存储选项卡
@@ -178,7 +194,6 @@ function CustomUILibrary:CreateWindow(config)
             buttonElement.TextSize = 14
             buttonElement.Font = Enum.Font.Gotham
             applyCorner(buttonElement, 6)
-            applyBlur(buttonElement)
             buttonElement.Parent = buttonFrame
 
             local descLabel = Instance.new("TextLabel")
@@ -212,7 +227,7 @@ function CustomUILibrary:CreateWindow(config)
             return button
         end
 
-        -- 开关组件（新添加）
+        -- 开关组件
         function tab:Toggle(toggleConfig)
             local toggle = {}
             toggle.Title = toggleConfig.Title or "开关"
@@ -237,12 +252,11 @@ function CustomUILibrary:CreateWindow(config)
             toggleButton.TextSize = 14
             toggleButton.Font = Enum.Font.Gotham
             applyCorner(toggleButton, 6)
-            applyBlur(toggleButton)
             toggleButton.Parent = toggleFrame
 
             local toggleIndicator = Instance.new("Frame")
             toggleIndicator.Size = UDim2.new(0, 30, 0, 20)
-            toggleIndicator.Position = UDim2.new(1, -40, 0.5, -10)
+            toggleIndicator.Position = toggle.State and UDim2.new(1, -40, 0.5, -10) or UDim2.new(1, -70, 0.5, -10)
             toggleIndicator.BackgroundColor3 = toggle.State and Color3.fromRGB(0, 200, 0) or Color3.fromRGB(200, 0, 0)
             applyCorner(toggleIndicator, 10)
             toggleIndicator.Parent = toggleButton
