@@ -1,9 +1,9 @@
 -- 自定义 Roblox UI 库 (HM-UI)
 -- 功能：支持窗口、选项卡、按钮、开关、滑块、输入框，带最小化/关闭按钮、拖拽（有限制）、大小调整、锁定/解锁功能及滚动条
 -- 作者：Grok（基于 xAI 提供）
--- 版本：4.3
+-- 版本：5.0
 -- 日期：2025-09-27
--- 说明：优化按钮创建支持用户指定格式，修复显示问题
+-- 说明：重做按钮功能，优化移动端兼容性，确保按钮显示，未来扩展注意手机适配
 
 local CustomUILibrary = {}
 
@@ -37,7 +37,7 @@ function CustomUILibrary:Notify(notifyConfig)
     notifyTitle.Text = notifyConfig.Title or "通知"
     notifyTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
     notifyTitle.BackgroundTransparency = 1
-    notifyTitle.TextSize = 16
+    notifyTitle.TextSize = 14 -- 调整为移动端友好尺寸
     notifyTitle.Font = Enum.Font.GothamBold
     notifyTitle.Parent = notifyFrame
 
@@ -69,11 +69,11 @@ function CustomUILibrary:CreateWindow(config)
     local window = {}
     window.Title = config.Title or "HM-UI 界面"
     window.SubTitle = config.SubTitle or "Created by Grok (xAI) - https://x.ai"
-    window.Size = config.Size or UDim2.fromOffset(600, 400) -- 统一默认大小
+    window.Size = config.Size or UDim2.fromOffset(600, 400) -- 默认大小，移动端可调整
     window.Theme = config.Theme or "Dark"
     window.IsMinimized = false
     window.IsLocked = false
-    window.MinSize = UDim2.new(0, 300, 0, 200)  -- 最小尺寸
+    window.MinSize = UDim2.new(0, 300, 0, 200)  -- 最小尺寸，适合移动端
 
     -- 创建主 ScreenGui
     local screenGui = Instance.new("ScreenGui")
@@ -85,7 +85,7 @@ function CustomUILibrary:CreateWindow(config)
     -- 主窗口框架
     local mainFrame = Instance.new("Frame")
     mainFrame.Size = window.Size
-    mainFrame.Position = UDim2.new(0.5, -window.Size.X.Offset / 2, 0.5, -window.Size.Y.Offset / 2) -- 居中初始位置
+    mainFrame.Position = UDim2.new(0.5, -window.Size.X.Offset / 2, 0.5, -window.Size.Y.Offset / 2) -- 居中
     mainFrame.BackgroundColor3 = window.Theme == "Dark" and Color3.fromRGB(20, 20, 20) or Color3.fromRGB(220, 220, 220)
     mainFrame.BackgroundTransparency = 0.1
     mainFrame.BorderSizePixel = 0
@@ -95,14 +95,14 @@ function CustomUILibrary:CreateWindow(config)
 
     -- 标题栏
     local titleBar = Instance.new("Frame")
-    titleBar.Size = UDim2.new(1, 0, 0, 60) -- 增加高度以容纳副标题
+    titleBar.Size = UDim2.new(1, 0, 0, 60)
     titleBar.BackgroundColor3 = window.Theme == "Dark" and Color3.fromRGB(15, 15, 15) or Color3.fromRGB(200, 200, 200)
     titleBar.BackgroundTransparency = 0.2
     applyCorner(titleBar, 8)
     titleBar.Parent = mainFrame
 
     local titleLabel = Instance.new("TextLabel")
-    titleLabel.Size = UDim2.new(1, -10, 0, 30) -- 主标题高度
+    titleLabel.Size = UDim2.new(1, -10, 0, 30)
     titleLabel.Position = UDim2.new(0, 10, 0, 5)
     titleLabel.Text = window.Title
     titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -113,17 +113,17 @@ function CustomUILibrary:CreateWindow(config)
     titleLabel.Parent = titleBar
 
     local subTitleLabel = Instance.new("TextLabel")
-    subTitleLabel.Size = UDim2.new(1, -10, 0, 20) -- 副标题高度
-    subTitleLabel.Position = UDim2.new(0, 10, 0, 35) -- 位于主标题下方
+    subTitleLabel.Size = UDim2.new(1, -10, 0, 20)
+    subTitleLabel.Position = UDim2.new(0, 10, 0, 35)
     subTitleLabel.Text = window.SubTitle
-    subTitleLabel.TextColor3 = Color3.fromRGB(180, 180, 180) -- 较浅颜色
+    subTitleLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
     subTitleLabel.BackgroundTransparency = 1
-    subTitleLabel.TextSize = 12 -- 字体较小
+    subTitleLabel.TextSize = 12
     subTitleLabel.Font = Enum.Font.Gotham
     subTitleLabel.TextXAlignment = Enum.TextXAlignment.Left
     subTitleLabel.Parent = titleBar
 
-    -- 窗口拖拽功能（有限制）
+    -- 窗口拖拽功能（移动端优化）
     local draggingConnection = nil
     local dragging = false
     local dragStart = nil
@@ -132,36 +132,30 @@ function CustomUILibrary:CreateWindow(config)
 
     titleBar.InputBegan:Connect(function(input)
         local inputType = input.UserInputType
-        if inputType == Enum.UserInputType.MouseButton1 or inputType == Enum.UserInputType.Touch then
-            if not window.IsLocked then
-                dragging = true
-                dragStart = input.Position
-                startPos = mainFrame.Position
-                draggingConnection = UserInputService.TouchEnded:Connect(function(touch)
-                    dragging = false
-                    if draggingConnection then
-                        draggingConnection:Disconnect()
-                        draggingConnection = nil
-                    end
-                end)
-            end
+        if (inputType == Enum.UserInputType.MouseButton1 or inputType == Enum.UserInputType.Touch) and not window.IsLocked then
+            dragging = true
+            dragStart = input.Position
+            startPos = mainFrame.Position
+            draggingConnection = UserInputService.TouchEnded:Connect(function()
+                dragging = false
+                if draggingConnection then
+                    draggingConnection:Disconnect()
+                    draggingConnection = nil
+                end
+            end)
         end
     end)
 
     titleBar.InputChanged:Connect(function(input)
-        local inputType = input.UserInputType
-        if dragging and (inputType == Enum.UserInputType.MouseMovement or inputType == Enum.UserInputType.Touch) then
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
             local delta = input.Position - dragStart
-            local newX = startPos.X.Offset + delta.X
-            local newY = startPos.Y.Offset + delta.Y
-            -- 限制拖动范围在屏幕内
-            newX = math.max(0, math.min(newX, screenSize.X - mainFrame.Size.X.Offset))
-            newY = math.max(0, math.min(newY, screenSize.Y - mainFrame.Size.Y.Offset))
+            local newX = math.max(0, math.min(startPos.X.Offset + delta.X, screenSize.X - mainFrame.Size.X.Offset))
+            local newY = math.max(0, math.min(startPos.Y.Offset + delta.Y, screenSize.Y - mainFrame.Size.Y.Offset))
             mainFrame.Position = UDim2.new(0, newX, 0, newY)
         end
     end)
 
-    -- 关闭按钮（圆形，文本 ×）
+    -- 关闭按钮
     local closeButton = Instance.new("TextButton")
     closeButton.Size = UDim2.new(0, 30, 0, 30)
     closeButton.Position = UDim2.new(1, -40, 0.5, -15)
@@ -175,8 +169,7 @@ function CustomUILibrary:CreateWindow(config)
     closeButton.Parent = titleBar
 
     closeButton.InputBegan:Connect(function(input)
-        local inputType = input.UserInputType
-        if inputType == Enum.UserInputType.MouseButton1 or inputType == Enum.UserInputType.Touch then
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             local initialSize = mainFrame.Size
             local initialPosition = mainFrame.Position
             local centerX = initialPosition.X.Offset + initialSize.X.Offset / 2
@@ -192,28 +185,27 @@ function CustomUILibrary:CreateWindow(config)
         end
     end)
 
-    -- 大小调整把手（右下角小三角，35x35 便于触摸）
+    -- 大小调整把手（移动端优化）
     local resizeHandle = Instance.new("Frame")
-    resizeHandle.Size = UDim2.new(0, 35, 0, 35)
-    resizeHandle.Position = UDim2.new(1, -35, 1, -35)
+    resizeHandle.Size = UDim2.new(0, 40, 0, 40) -- 增大尺寸便于触摸
+    resizeHandle.Position = UDim2.new(1, -40, 1, -40)
     resizeHandle.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
     resizeHandle.BackgroundTransparency = 0.5
     applyCorner(resizeHandle, 4)
     local resizeLine1 = Instance.new("Frame")
     resizeLine1.Size = UDim2.new(0, 20, 0, 2)
-    resizeLine1.Position = UDim2.new(0, 7, 0, 7)
+    resizeLine1.Position = UDim2.new(0, 10, 0, 10)
     resizeLine1.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     resizeLine1.Rotation = 45
     resizeLine1.Parent = resizeHandle
     local resizeLine2 = Instance.new("Frame")
     resizeLine2.Size = UDim2.new(0, 20, 0, 2)
-    resizeLine2.Position = UDim2.new(0, 7, 0, 17)
+    resizeLine2.Position = UDim2.new(0, 10, 0, 20)
     resizeLine2.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     resizeLine2.Rotation = 45
     resizeLine2.Parent = resizeHandle
     resizeHandle.Parent = mainFrame
 
-    -- 窗口大小调整功能（优化移动端响应）
     local resizingConnection = nil
     local resizing = false
     local resizeStart = nil
@@ -221,27 +213,23 @@ function CustomUILibrary:CreateWindow(config)
     local startPos = nil
 
     resizeHandle.InputBegan:Connect(function(input)
-        local inputType = input.UserInputType
-        if inputType == Enum.UserInputType.MouseButton1 or inputType == Enum.UserInputType.Touch then
-            if not window.IsLocked then
-                resizing = true
-                resizeStart = input.Position
-                startSize = mainFrame.Size
-                startPos = mainFrame.Position
-                resizingConnection = UserInputService.TouchEnded:Connect(function(touch)
-                    resizing = false
-                    if resizingConnection then
-                        resizingConnection:Disconnect()
-                        resizingConnection = nil
-                    end
-                end)
-            end
+        if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and not window.IsLocked then
+            resizing = true
+            resizeStart = input.Position
+            startSize = mainFrame.Size
+            startPos = mainFrame.Position
+            resizingConnection = UserInputService.TouchEnded:Connect(function()
+                resizing = false
+                if resizingConnection then
+                    resizingConnection:Disconnect()
+                    resizingConnection = nil
+                end
+            end)
         end
     end)
 
     resizeHandle.InputChanged:Connect(function(input)
-        local inputType = input.UserInputType
-        if resizing and (inputType == Enum.UserInputType.MouseMovement or inputType == Enum.UserInputType.Touch) then
+        if resizing and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
             local delta = input.Position - resizeStart
             local newWidth = math.max(window.MinSize.X.Offset, startSize.X.Offset + delta.X)
             local newHeight = math.max(window.MinSize.Y.Offset, startSize.Y.Offset + delta.Y)
@@ -251,13 +239,13 @@ function CustomUILibrary:CreateWindow(config)
         end
     end)
 
-    -- 选项卡容器（添加滚动条）
+    -- 选项卡容器（移动端优化）
     local tabContainer = Instance.new("ScrollingFrame")
     tabContainer.Size = UDim2.new(0, 160, 1, -60)
     tabContainer.Position = UDim2.new(0, 0, 0, 60)
     tabContainer.BackgroundColor3 = window.Theme == "Dark" and Color3.fromRGB(25, 25, 25) or Color3.fromRGB(210, 210, 210)
     tabContainer.BackgroundTransparency = 0.3
-    tabContainer.ScrollBarThickness = 6
+    tabContainer.ScrollBarThickness = 8 -- 增大便于触摸
     tabContainer.ScrollBarImageColor3 = window.Theme == "Dark" and Color3.fromRGB(100, 100, 100) or Color3.fromRGB(150, 150, 150)
     tabContainer.CanvasSize = UDim2.new(0, 0, 0, 0)
     applyCorner(tabContainer, 8)
@@ -273,13 +261,13 @@ function CustomUILibrary:CreateWindow(config)
     tabPadding.PaddingBottom = UDim.new(0, 5)
     tabPadding.Parent = tabContainer
 
-    -- 内容区域（添加滚动条）
+    -- 内容区域（移动端优化）
     local contentFrame = Instance.new("ScrollingFrame")
     contentFrame.Size = UDim2.new(1, -160, 1, -60)
     contentFrame.Position = UDim2.new(0, 160, 0, 60)
     contentFrame.BackgroundColor3 = window.Theme == "Dark" and Color3.fromRGB(30, 30, 30) or Color3.fromRGB(230, 230, 230)
     contentFrame.BackgroundTransparency = 0.3
-    contentFrame.ScrollBarThickness = 6
+    contentFrame.ScrollBarThickness = 8 -- 增大便于触摸
     contentFrame.ScrollBarImageColor3 = window.Theme == "Dark" and Color3.fromRGB(100, 100, 100) or Color3.fromRGB(150, 150, 150)
     contentFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
     applyCorner(contentFrame, 8)
@@ -287,7 +275,7 @@ function CustomUILibrary:CreateWindow(config)
 
     local contentListLayout = Instance.new("UIListLayout")
     contentListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    contentListLayout.Padding = UDim.new(0, 8)
+    contentListLayout.Padding = UDim.new(0, 10) -- 增大间距便于触摸
     contentListLayout.Parent = contentFrame
 
     local contentPadding = Instance.new("UIPadding")
@@ -308,17 +296,17 @@ function CustomUILibrary:CreateWindow(config)
     window.Tabs = {}
     window.CurrentTab = nil
 
-    -- 可拖动最小化按钮
+    -- 可拖动最小化按钮（移动端优化）
     local minimizeButton = Instance.new("TextButton")
-    minimizeButton.Size = UDim2.new(0, 40, 0, 40)
+    minimizeButton.Size = UDim2.new(0, 50, 0, 50) -- 增大尺寸
     minimizeButton.Position = UDim2.new(0, 20, 0, 20)
     minimizeButton.BackgroundColor3 = Color3.fromRGB(200, 200, 0)
     minimizeButton.BackgroundTransparency = 0.2
     minimizeButton.Text = "-"
     minimizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    minimizeButton.TextSize = 20
+    minimizeButton.TextSize = 24 -- 增大文字
     minimizeButton.Font = Enum.Font.GothamBold
-    applyCorner(minimizeButton, 20)
+    applyCorner(minimizeButton, 25)
     minimizeButton.Parent = screenGui
     minimizeButton.Visible = true
 
@@ -327,12 +315,11 @@ function CustomUILibrary:CreateWindow(config)
     local minStartPos = nil
 
     minimizeButton.InputBegan:Connect(function(input)
-        local inputType = input.UserInputType
-        if inputType == Enum.UserInputType.MouseButton1 or inputType == Enum.UserInputType.Touch then
+        if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
             minDragging = true
             minDragStart = input.Position
             minStartPos = minimizeButton.Position
-            local dragConnection = UserInputService.TouchEnded:Connect(function(touch)
+            local dragConnection = UserInputService.TouchEnded:Connect(function()
                 minDragging = false
                 if dragConnection then
                     dragConnection:Disconnect()
@@ -343,8 +330,7 @@ function CustomUILibrary:CreateWindow(config)
     end)
 
     minimizeButton.InputChanged:Connect(function(input)
-        local inputType = input.UserInputType
-        if minDragging and (inputType == Enum.UserInputType.MouseMovement or inputType == Enum.UserInputType.Touch) then
+        if minDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
             local delta = input.Position - minDragStart
             local newX = math.max(0, minStartPos.X.Offset + delta.X)
             local newY = math.max(0, minStartPos.Y.Offset + delta.Y)
@@ -366,17 +352,17 @@ function CustomUILibrary:CreateWindow(config)
         end
     end)
 
-    -- 可拖动锁定/解锁按钮
+    -- 可拖动锁定/解锁按钮（移动端优化）
     local lockButton = Instance.new("TextButton")
-    lockButton.Size = UDim2.new(0, 40, 0, 40)
-    lockButton.Position = UDim2.new(0, 70, 0, 20) -- 右侧最小化按钮
-    lockButton.BackgroundColor3 = Color3.fromRGB(0, 150, 0) -- 绿色表示解锁
+    lockButton.Size = UDim2.new(0, 50, 0, 50) -- 增大尺寸
+    lockButton.Position = UDim2.new(0, 80, 0, 20)
+    lockButton.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
     lockButton.BackgroundTransparency = 0.2
-    lockButton.Text = "🔓" -- 初始解锁状态
+    lockButton.Text = "🔓"
     lockButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    lockButton.TextSize = 20
+    lockButton.TextSize = 24 -- 增大文字
     lockButton.Font = Enum.Font.GothamBold
-    applyCorner(lockButton, 20)
+    applyCorner(lockButton, 25)
     lockButton.Parent = screenGui
     lockButton.Visible = true
 
@@ -385,12 +371,11 @@ function CustomUILibrary:CreateWindow(config)
     local lockStartPos = nil
 
     lockButton.InputBegan:Connect(function(input)
-        local inputType = input.UserInputType
-        if inputType == Enum.UserInputType.MouseButton1 or inputType == Enum.UserInputType.Touch then
+        if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
             lockDragging = true
             lockDragStart = input.Position
             lockStartPos = lockButton.Position
-            local dragConnection = UserInputService.TouchEnded:Connect(function(touch)
+            local dragConnection = UserInputService.TouchEnded:Connect(function()
                 lockDragging = false
                 if dragConnection then
                     dragConnection:Disconnect()
@@ -401,8 +386,7 @@ function CustomUILibrary:CreateWindow(config)
     end)
 
     lockButton.InputChanged:Connect(function(input)
-        local inputType = input.UserInputType
-        if lockDragging and (inputType == Enum.UserInputType.MouseMovement or inputType == Enum.UserInputType.Touch) then
+        if lockDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
             local delta = input.Position - lockDragStart
             local newX = math.max(0, lockStartPos.X.Offset + delta.X)
             local newY = math.max(0, lockStartPos.Y.Offset + delta.Y)
@@ -414,7 +398,7 @@ function CustomUILibrary:CreateWindow(config)
         window.IsLocked = not window.IsLocked
         if window.IsLocked then
             lockButton.Text = "🔒"
-            lockButton.BackgroundColor3 = Color3.fromRGB(150, 0, 0) -- 红色表示锁定
+            lockButton.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
             TweenService:Create(lockButton, TweenInfo.new(0.3, Enum.EasingStyle.Sine), {BackgroundColor3 = Color3.fromRGB(200, 0, 0)}):Play()
             if draggingConnection then draggingConnection:Disconnect() end
             if resizingConnection then resizingConnection:Disconnect() end
@@ -434,7 +418,7 @@ function CustomUILibrary:CreateWindow(config)
         tab.Default = tabConfig.Default or false
 
         local tabButton = Instance.new("TextButton")
-        tabButton.Size = UDim2.new(1, -10, 0, 45)
+        tabButton.Size = UDim2.new(1, -10, 0, 50) -- 增大尺寸便于触摸
         tabButton.BackgroundColor3 = window.Theme == "Dark" and Color3.fromRGB(40, 40, 40) or Color3.fromRGB(180, 180, 180)
         tabButton.BackgroundTransparency = 0.4
         tabButton.Text = tab.Icon ~= "" and tab.Icon .. " " .. tab.Title or tab.Title
@@ -454,7 +438,7 @@ function CustomUILibrary:CreateWindow(config)
 
         local contentListLayout = Instance.new("UIListLayout")
         contentListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-        contentListLayout.Padding = UDim.new(0, 8)
+        contentListLayout.Padding = UDim.new(0, 10) -- 增大间距
         contentListLayout.Parent = tabContent
 
         tabButton.MouseButton1Click:Connect(function()
@@ -480,51 +464,47 @@ function CustomUILibrary:CreateWindow(config)
             local button = {}
             button.Title = buttonConfig.Title or "按钮"
             button.Desc = buttonConfig.Desc or ""
-            button.Icon = buttonConfig.Icon or ""
             button.Locked = buttonConfig.Locked or false
             button.Callback = buttonConfig.Callback or function() end
 
             local buttonFrame = Instance.new("Frame")
-            buttonFrame.Size = UDim2.new(1, 0, 0, 60)
+            buttonFrame.Size = UDim2.new(1, 0, 0, 70) -- 增大尺寸便于触摸
             buttonFrame.BackgroundTransparency = 1
             buttonFrame.Parent = tabContent
 
             local buttonElement = Instance.new("TextButton")
-            buttonElement.Size = UDim2.new(1, 0, 0, 40)
+            buttonElement.Size = UDim2.new(1, -20, 0, 50) -- 增大按钮尺寸
             buttonElement.BackgroundColor3 = window.Theme == "Dark" and Color3.fromRGB(50, 50, 50) or Color3.fromRGB(170, 170, 170)
             buttonElement.BackgroundTransparency = 0.5
-            buttonElement.Text = (button.Icon ~= "" and button.Icon .. " " or "") .. button.Title
+            buttonElement.Text = button.Title
             buttonElement.TextColor3 = Color3.fromRGB(255, 255, 255)
-            buttonElement.TextSize = 14
+            buttonElement.TextSize = 16 -- 增大文字
             buttonElement.Font = Enum.Font.Gotham
             applyCorner(buttonElement, 6)
             buttonElement.Parent = buttonFrame
 
             local descLabel = Instance.new("TextLabel")
-            descLabel.Size = UDim2.new(1, 0, 0, 15)
-            descLabel.Position = UDim2.new(0, 0, 0, 45)
+            descLabel.Size = UDim2.new(1, -20, 0, 20)
+            descLabel.Position = UDim2.new(0, 10, 0, 50)
             descLabel.BackgroundTransparency = 1
             descLabel.Text = button.Desc
             descLabel.TextColor3 = window.Theme == "Dark" and Color3.fromRGB(180, 180, 180) or Color3.fromRGB(100, 100, 100)
             descLabel.TextSize = 12
             descLabel.Font = Enum.Font.Gotham
+            descLabel.TextWrapped = true
             descLabel.Parent = buttonFrame
 
             buttonElement.InputBegan:Connect(function(input)
-                local inputType = input.UserInputType
-                if inputType == Enum.UserInputType.MouseButton1 or inputType == Enum.UserInputType.Touch then
-                    if not button.Locked then
-                        TweenService:Create(buttonElement, TweenInfo.new(0.1, Enum.EasingStyle.Sine), {
-                            BackgroundColor3 = window.Theme == "Dark" and Color3.fromRGB(80, 80, 80) or Color3.fromRGB(140, 140, 140),
-                            BackgroundTransparency = 0.3
-                        }):Play()
-                    end
+                if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and not button.Locked then
+                    TweenService:Create(buttonElement, TweenInfo.new(0.1, Enum.EasingStyle.Sine), {
+                        BackgroundColor3 = window.Theme == "Dark" and Color3.fromRGB(80, 80, 80) or Color3.fromRGB(140, 140, 140),
+                        BackgroundTransparency = 0.3
+                    }):Play()
                 end
             end)
 
             buttonElement.InputEnded:Connect(function(input)
-                local inputType = input.UserInputType
-                if inputType == Enum.UserInputType.MouseButton1 or inputType == Enum.UserInputType.Touch then
+                if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
                     if not button.Locked then
                         TweenService:Create(buttonElement, TweenInfo.new(0.1, Enum.EasingStyle.Sine), {
                             BackgroundColor3 = window.Theme == "Dark" and Color3.fromRGB(50, 50, 50) or Color3.fromRGB(170, 170, 170),
@@ -548,68 +528,62 @@ function CustomUILibrary:CreateWindow(config)
             local toggle = {}
             toggle.Title = toggleConfig.Title or "开关"
             toggle.Desc = toggleConfig.Desc or ""
-            toggle.Icon = toggleConfig.Icon or ""
             toggle.Locked = toggleConfig.Locked or false
             toggle.State = toggleConfig.Default or false
             toggle.Callback = toggleConfig.Callback or function(state) end
 
             local toggleFrame = Instance.new("Frame")
-            toggleFrame.Size = UDim2.new(1, 0, 0, 60)
+            toggleFrame.Size = UDim2.new(1, 0, 0, 70) -- 增大尺寸
             toggleFrame.BackgroundTransparency = 1
             toggleFrame.Parent = tabContent
 
             local toggleButton = Instance.new("TextButton")
-            toggleButton.Size = UDim2.new(1, 0, 0, 40)
+            toggleButton.Size = UDim2.new(1, -20, 0, 50) -- 增大按钮尺寸
             toggleButton.BackgroundColor3 = window.Theme == "Dark" and Color3.fromRGB(50, 50, 50) or Color3.fromRGB(170, 170, 170)
             toggleButton.BackgroundTransparency = 0.5
-            toggleButton.Text = toggle.Icon ~= "" and toggle.Icon .. " " .. toggle.Title or toggle.Title
+            toggleButton.Text = toggle.Title
             toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-            toggleButton.TextSize = 14
+            toggleButton.TextSize = 16 -- 增大文字
             toggleButton.Font = Enum.Font.Gotham
             applyCorner(toggleButton, 6)
             toggleButton.Parent = toggleFrame
 
             local toggleIndicator = Instance.new("Frame")
-            toggleIndicator.Size = UDim2.new(0, 30, 0, 20)
-            toggleIndicator.Position = toggle.State and UDim2.new(1, -40, 0.5, -10) or UDim2.new(1, -70, 0.5, -10)
+            toggleIndicator.Size = UDim2.new(0, 40, 0, 30) -- 增大指示器
+            toggleIndicator.Position = toggle.State and UDim2.new(1, -50, 0.5, -15) or UDim2.new(1, -90, 0.5, -15)
             toggleIndicator.BackgroundColor3 = toggle.State and Color3.fromRGB(0, 200, 0) or Color3.fromRGB(200, 0, 0)
-            applyCorner(toggleIndicator, 10)
+            applyCorner(toggleIndicator, 15)
             toggleIndicator.Parent = toggleButton
 
             local descLabel = Instance.new("TextLabel")
-            descLabel.Size = UDim2.new(1, 0, 0, 15)
-            descLabel.Position = UDim2.new(0, 0, 0, 45)
+            descLabel.Size = UDim2.new(1, -20, 0, 20)
+            descLabel.Position = UDim2.new(0, 10, 0, 50)
             descLabel.BackgroundTransparency = 1
             descLabel.Text = toggle.Desc
             descLabel.TextColor3 = window.Theme == "Dark" and Color3.fromRGB(180, 180, 180) or Color3.fromRGB(100, 100, 100)
             descLabel.TextSize = 12
             descLabel.Font = Enum.Font.Gotham
+            descLabel.TextWrapped = true
             descLabel.Parent = toggleFrame
 
             toggleButton.InputBegan:Connect(function(input)
-                local inputType = input.UserInputType
-                if inputType == Enum.UserInputType.MouseButton1 or inputType == Enum.UserInputType.Touch then
-                    if not toggle.Locked then
-                        toggle.State = not toggle.State
-                        TweenService:Create(toggleIndicator, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {
-                            BackgroundColor3 = toggle.State and Color3.fromRGB(0, 200, 0) or Color3.fromRGB(200, 0, 0),
-                            Position = toggle.State and UDim2.new(1, -40, 0.5, -10) or UDim2.new(1, -70, 0.5, -10)
-                        }):Play()
-                        toggle.Callback(toggle.State)
-                    end
+                if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and not toggle.Locked then
+                    toggle.State = not toggle.State
+                    TweenService:Create(toggleIndicator, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {
+                        BackgroundColor3 = toggle.State and Color3.fromRGB(0, 200, 0) or Color3.fromRGB(200, 0, 0),
+                        Position = toggle.State and UDim2.new(1, -50, 0.5, -15) or UDim2.new(1, -90, 0.5, -15)
+                    }):Play()
+                    toggle.Callback(toggle.State)
                 end
             end)
 
             toggleButton.InputEnded:Connect(function(input)
-                local inputType = input.UserInputType
-                if inputType == Enum.UserInputType.MouseButton1 or inputType == Enum.UserInputType.Touch then
-                    if toggle.Locked then
-                        self:Notify({
-                            Title = "错误",
-                            Content = "此开关已锁定！",
-                            Duration = 3
-                        })
-                    end
+                if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and toggle.Locked then
+                    self:Notify({
+                        Title = "错误",
+                        Content = "此开关已锁定！",
+                        Duration = 3
+                    })
                 end
             end)
 
@@ -626,46 +600,46 @@ function CustomUILibrary:CreateWindow(config)
             slider.Callback = sliderConfig.Callback or function(value) end
 
             local sliderFrame = Instance.new("Frame")
-            sliderFrame.Size = UDim2.new(1, 0, 0, 60)
+            sliderFrame.Size = UDim2.new(1, 0, 0, 80) -- 增大尺寸
             sliderFrame.BackgroundTransparency = 1
             sliderFrame.Parent = tabContent
 
             local titleLabel = Instance.new("TextLabel")
-            titleLabel.Size = UDim2.new(1, 0, 0, 20)
+            titleLabel.Size = UDim2.new(1, -20, 0, 20)
             titleLabel.BackgroundTransparency = 1
             titleLabel.Text = slider.Title
             titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-            titleLabel.TextSize = 14
+            titleLabel.TextSize = 16
             titleLabel.Font = Enum.Font.Gotham
             titleLabel.Parent = sliderFrame
 
             local sliderBar = Instance.new("Frame")
-            sliderBar.Size = UDim2.new(1, 0, 0, 10)
-            sliderBar.Position = UDim2.new(0, 0, 0, 25)
+            sliderBar.Size = UDim2.new(1, -20, 0, 20) -- 增大滑块高度
+            sliderBar.Position = UDim2.new(0, 10, 0, 30)
             sliderBar.BackgroundColor3 = window.Theme == "Dark" and Color3.fromRGB(60, 60, 60) or Color3.fromRGB(180, 180, 180)
             sliderBar.BackgroundTransparency = 0.5
-            applyCorner(sliderBar, 5)
+            applyCorner(sliderBar, 10)
             sliderBar.Parent = sliderFrame
 
             local sliderFill = Instance.new("Frame")
             sliderFill.Size = UDim2.new(0, 0, 1, 0)
             sliderFill.BackgroundColor3 = window.Theme == "Dark" and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(0, 200, 0)
-            applyCorner(sliderFill, 5)
+            applyCorner(sliderFill, 10)
             sliderFill.Parent = sliderBar
 
             local sliderKnob = Instance.new("Frame")
-            sliderKnob.Size = UDim2.new(0, 20, 0, 20)
+            sliderKnob.Size = UDim2.new(0, 30, 0, 30) -- 增大旋钮
             sliderKnob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-            applyCorner(sliderKnob, 10)
+            applyCorner(sliderKnob, 15)
             sliderKnob.Parent = sliderBar
 
             local valueLabel = Instance.new("TextLabel")
-            valueLabel.Size = UDim2.new(0, 50, 0, 20)
-            valueLabel.Position = UDim2.new(1, -60, 0, 25)
+            valueLabel.Size = UDim2.new(0, 60, 0, 20)
+            valueLabel.Position = UDim2.new(1, -70, 0, 30)
             valueLabel.BackgroundTransparency = 1
             valueLabel.Text = tostring(slider.Default)
             valueLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-            valueLabel.TextSize = 12
+            valueLabel.TextSize = 14
             valueLabel.Font = Enum.Font.Gotham
             valueLabel.Parent = sliderFrame
 
@@ -673,7 +647,7 @@ function CustomUILibrary:CreateWindow(config)
                 local percentage = (value - slider.Min) / (slider.Max - slider.Min)
                 local barWidth = sliderBar.AbsoluteSize.X
                 sliderFill.Size = UDim2.new(0, percentage * barWidth, 1, 0)
-                sliderKnob.Position = UDim2.new(percentage, -10, 0.5, -10)
+                sliderKnob.Position = UDim2.new(percentage, -15, 0.5, -15)
                 valueLabel.Text = tostring(math.floor(value))
                 slider.Callback(value)
             end
@@ -682,8 +656,7 @@ function CustomUILibrary:CreateWindow(config)
 
             local dragging = false
             sliderKnob.InputBegan:Connect(function(input)
-                local inputType = input.UserInputType
-                if inputType == Enum.UserInputType.MouseButton1 or inputType == Enum.UserInputType.Touch then
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                     dragging = true
                     local startPos = UserInputService:GetMouseLocation().X
                     local startValue = slider.Default
@@ -712,28 +685,28 @@ function CustomUILibrary:CreateWindow(config)
             textBox.Callback = textBoxConfig.Callback or function(text) end
 
             local textBoxFrame = Instance.new("Frame")
-            textBoxFrame.Size = UDim2.new(1, 0, 0, 60)
+            textBoxFrame.Size = UDim2.new(1, 0, 0, 80) -- 增大尺寸
             textBoxFrame.BackgroundTransparency = 1
             textBoxFrame.Parent = tabContent
 
             local titleLabel = Instance.new("TextLabel")
-            titleLabel.Size = UDim2.new(1, 0, 0, 20)
+            titleLabel.Size = UDim2.new(1, -20, 0, 20)
             titleLabel.BackgroundTransparency = 1
             titleLabel.Text = textBox.Title
             titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-            titleLabel.TextSize = 14
+            titleLabel.TextSize = 16
             titleLabel.Font = Enum.Font.Gotham
             titleLabel.Parent = textBoxFrame
 
             local textBoxElement = Instance.new("TextBox")
-            textBoxElement.Size = UDim2.new(1, 0, 0, 30)
-            textBoxElement.Position = UDim2.new(0, 0, 0, 25)
+            textBoxElement.Size = UDim2.new(1, -20, 0, 40) -- 增大输入框
+            textBoxElement.Position = UDim2.new(0, 10, 0, 30)
             textBoxElement.BackgroundColor3 = window.Theme == "Dark" and Color3.fromRGB(50, 50, 50) or Color3.fromRGB(170, 170, 170)
             textBoxElement.BackgroundTransparency = 0.5
             textBoxElement.Text = ""
             textBoxElement.PlaceholderText = textBox.Placeholder
             textBoxElement.TextColor3 = Color3.fromRGB(255, 255, 255)
-            textBoxElement.TextSize = 14
+            textBoxElement.TextSize = 16
             textBoxElement.Font = Enum.Font.Gotham
             applyCorner(textBoxElement, 6)
             textBoxElement.Parent = textBoxFrame
