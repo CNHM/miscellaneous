@@ -1,9 +1,9 @@
 -- 自定义 Roblox UI 库 (HM-UI)
--- 功能：支持窗口、选项卡、按钮、开关、滑块、输入框，带最小化/关闭按钮、拖拽（无边界限制）、大小调整（全面兼容 PC/移动）及过渡动画
+-- 功能：支持窗口、选项卡、按钮、开关、滑块、输入框，带最小化/关闭按钮、拖拽（有限制）、大小调整（全面兼容 PC/移动）及过渡动画
 -- 作者：Grok（基于 xAI 提供）
--- 版本：3.8
+-- 版本：3.9
 -- 日期：2025-09-27
--- 说明：修复选项卡显示问题，去除 UI 拖动限制，优化性能
+-- 说明：统一 UI 大小，优化拖动限制，防止无限偏移
 
 local CustomUILibrary = {}
 
@@ -69,7 +69,7 @@ function CustomUILibrary:CreateWindow(config)
     local window = {}
     window.Title = config.Title or "HM-UI 界面"
     window.SubTitle = config.SubTitle or "Created by Grok (xAI) - https://x.ai"
-    window.Size = config.Size or UDim2.new(0, 600, 0, 400)
+    window.Size = config.Size or UDim2.fromOffset(600, 400) -- 统一默认大小
     window.Theme = config.Theme or "Dark"
     window.IsMinimized = false
     window.MinSize = UDim2.new(0, 300, 0, 200)  -- 最小尺寸
@@ -84,18 +84,13 @@ function CustomUILibrary:CreateWindow(config)
     -- 主窗口框架
     local mainFrame = Instance.new("Frame")
     mainFrame.Size = window.Size
-    mainFrame.Position = UDim2.new(0.5, -window.Size.X.Offset / 2, 0.5, 100) -- 初始位置用于动画
+    mainFrame.Position = UDim2.new(0.5, -window.Size.X.Offset / 2, 0.5, -window.Size.Y.Offset / 2) -- 居中初始位置
     mainFrame.BackgroundColor3 = window.Theme == "Dark" and Color3.fromRGB(20, 20, 20) or Color3.fromRGB(220, 220, 220)
     mainFrame.BackgroundTransparency = 0.1
     mainFrame.BorderSizePixel = 0
     mainFrame.ClipsDescendants = true
     applyCorner(mainFrame, 12)
     mainFrame.Parent = screenGui
-
-    -- 窗口出现动画
-    TweenService:Create(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-        Position = UDim2.new(0.5, -window.Size.X.Offset / 2, 0.5, -window.Size.Y.Offset / 2)
-    }):Play()
 
     -- 标题栏
     local titleBar = Instance.new("Frame")
@@ -127,11 +122,12 @@ function CustomUILibrary:CreateWindow(config)
     subTitleLabel.TextXAlignment = Enum.TextXAlignment.Left
     subTitleLabel.Parent = titleBar
 
-    -- 窗口拖拽功能（无边界限制）
+    -- 窗口拖拽功能（有限制）
     local draggingConnection = nil
     local dragging = false
     local dragStart = nil
     local startPos = nil
+    local screenSize = workspace.CurrentCamera.ViewportSize
 
     titleBar.InputBegan:Connect(function(input)
         local inputType = input.UserInputType
@@ -153,7 +149,12 @@ function CustomUILibrary:CreateWindow(config)
         local inputType = input.UserInputType
         if dragging and (inputType == Enum.UserInputType.MouseMovement or inputType == Enum.UserInputType.Touch) then
             local delta = input.Position - dragStart
-            mainFrame.Position = UDim2.new(0, startPos.X.Offset + delta.X, 0, startPos.Y.Offset + delta.Y)
+            local newX = startPos.X.Offset + delta.X
+            local newY = startPos.Y.Offset + delta.Y
+            -- 限制拖动范围在屏幕内
+            newX = math.max(-mainFrame.Size.X.Offset, math.min(newX, screenSize.X))
+            newY = math.max(-mainFrame.Size.Y.Offset, math.min(newY, screenSize.Y))
+            mainFrame.Position = UDim2.new(0, newX, 0, newY)
         end
     end)
 
@@ -310,7 +311,9 @@ function CustomUILibrary:CreateWindow(config)
         local inputType = input.UserInputType
         if minDragging and (inputType == Enum.UserInputType.MouseMovement or inputType == Enum.UserInputType.Touch) then
             local delta = input.Position - minDragStart
-            minimizeButton.Position = UDim2.new(0, minStartPos.X.Offset + delta.X, 0, minStartPos.Y.Offset + delta.Y)
+            local newX = math.max(0, minStartPos.X.Offset + delta.X) -- 限制左边界
+            local newY = math.max(0, minStartPos.Y.Offset + delta.Y) -- 限制上边界
+            minimizeButton.Position = UDim2.new(0, newX, 0, newY)
         end
     end)
 
