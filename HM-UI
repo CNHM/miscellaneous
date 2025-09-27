@@ -1,9 +1,9 @@
 -- 自定义 Roblox UI 库 (HM-UI)
--- 功能：支持窗口、选项卡、按钮、开关、滑块、输入框，带最小化/关闭按钮、拖拽（有限制）、大小调整及锁定/解锁功能
+-- 功能：支持窗口、选项卡、按钮、开关、滑块、输入框，带最小化/关闭按钮、拖拽（有限制）、大小调整、锁定/解锁功能及滚动条
 -- 作者：Grok（基于 xAI 提供）
--- 版本：4.0
+-- 版本：4.1
 -- 日期：2025-09-27
--- 说明：添加锁定/解锁按钮，优化拖动和调整逻辑
+-- 说明：为选项卡和功能栏添加滚动条，优化布局
 
 local CustomUILibrary = {}
 
@@ -251,12 +251,15 @@ function CustomUILibrary:CreateWindow(config)
         end
     end)
 
-    -- 选项卡容器
-    local tabContainer = Instance.new("Frame")
+    -- 选项卡容器（添加滚动条）
+    local tabContainer = Instance.new("ScrollingFrame")
     tabContainer.Size = UDim2.new(0, 160, 1, -60)
     tabContainer.Position = UDim2.new(0, 0, 0, 60)
     tabContainer.BackgroundColor3 = window.Theme == "Dark" and Color3.fromRGB(25, 25, 25) or Color3.fromRGB(210, 210, 210)
     tabContainer.BackgroundTransparency = 0.3
+    tabContainer.ScrollBarThickness = 6
+    tabContainer.ScrollBarImageColor3 = window.Theme == "Dark" and Color3.fromRGB(100, 100, 100) or Color3.fromRGB(150, 150, 150)
+    tabContainer.CanvasSize = UDim2.new(0, 0, 0, 0)
     applyCorner(tabContainer, 8)
     tabContainer.Parent = mainFrame
 
@@ -265,14 +268,32 @@ function CustomUILibrary:CreateWindow(config)
     tabListLayout.Padding = UDim.new(0, 5)
     tabListLayout.Parent = tabContainer
 
-    -- 内容区域
-    local contentFrame = Instance.new("Frame")
+    local tabPadding = Instance.new("UIPadding")
+    tabPadding.PaddingTop = UDim.new(0, 5)
+    tabPadding.PaddingBottom = UDim.new(0, 5)
+    tabPadding.Parent = tabContainer
+
+    -- 内容区域（添加滚动条）
+    local contentFrame = Instance.new("ScrollingFrame")
     contentFrame.Size = UDim2.new(1, -160, 1, -60)
     contentFrame.Position = UDim2.new(0, 160, 0, 60)
     contentFrame.BackgroundColor3 = window.Theme == "Dark" and Color3.fromRGB(30, 30, 30) or Color3.fromRGB(230, 230, 230)
     contentFrame.BackgroundTransparency = 0.3
+    contentFrame.ScrollBarThickness = 6
+    contentFrame.ScrollBarImageColor3 = window.Theme == "Dark" and Color3.fromRGB(100, 100, 100) or Color3.fromRGB(150, 150, 150)
+    contentFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
     applyCorner(contentFrame, 8)
     contentFrame.Parent = mainFrame
+
+    local contentListLayout = Instance.new("UIListLayout")
+    contentListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    contentListLayout.Padding = UDim.new(0, 8)
+    contentListLayout.Parent = contentFrame
+
+    local contentPadding = Instance.new("UIPadding")
+    contentPadding.PaddingTop = UDim.new(0, 5)
+    contentPadding.PaddingBottom = UDim.new(0, 5)
+    contentPadding.Parent = contentFrame
 
     -- 存储选项卡
     window.Tabs = {}
@@ -415,8 +436,11 @@ function CustomUILibrary:CreateWindow(config)
         applyCorner(tabButton, 6)
         tabButton.Parent = tabContainer
 
+        -- 更新 CanvasSize
+        tabContainer.CanvasSize = UDim2.new(0, 0, 0, tabListLayout.AbsoluteContentSize.Y + 10)
+
         local tabContent = Instance.new("Frame")
-        tabContent.Size = UDim2.new(1, 0, 1, 0)
+        tabContent.Size = UDim2.new(1, 0, 0, 0) -- 动态大小
         tabContent.BackgroundColor3 = window.Theme == "Dark" and Color3.fromRGB(40, 40, 40) or Color3.fromRGB(200, 200, 200)
         tabContent.BackgroundTransparency = 0.2
         tabContent.Visible = tab.Default
@@ -427,6 +451,9 @@ function CustomUILibrary:CreateWindow(config)
         contentListLayout.SortOrder = Enum.SortOrder.LayoutOrder
         contentListLayout.Padding = UDim.new(0, 8)
         contentListLayout.Parent = tabContent
+
+        -- 更新 CanvasSize
+        contentFrame.CanvasSize = UDim2.new(0, 0, 0, contentListLayout.AbsoluteContentSize.Y + 10)
 
         tabButton.MouseButton1Click:Connect(function()
             if tab.Locked then
@@ -513,6 +540,9 @@ function CustomUILibrary:CreateWindow(config)
                 end
             end)
 
+            -- 更新 CanvasSize
+            contentFrame.CanvasSize = UDim2.new(0, 0, 0, contentListLayout.AbsoluteContentSize.Y + 10)
+
             return button
         end
 
@@ -585,6 +615,9 @@ function CustomUILibrary:CreateWindow(config)
                     end
                 end
             end)
+
+            -- 更新 CanvasSize
+            contentFrame.CanvasSize = UDim2.new(0, 0, 0, contentListLayout.AbsoluteContentSize.Y + 10)
 
             return toggle
         end
@@ -676,6 +709,9 @@ function CustomUILibrary:CreateWindow(config)
                 end
             end)
 
+            -- 更新 CanvasSize
+            contentFrame.CanvasSize = UDim2.new(0, 0, 0, contentListLayout.AbsoluteContentSize.Y + 10)
+
             return slider
         end
 
@@ -718,6 +754,9 @@ function CustomUILibrary:CreateWindow(config)
                     textBox.Callback(textBoxElement.Text)
                 end
             end)
+
+            -- 更新 CanvasSize
+            contentFrame.CanvasSize = UDim2.new(0, 0, 0, contentListLayout.AbsoluteContentSize.Y + 10)
 
             return textBox
         end
