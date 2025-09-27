@@ -1,9 +1,9 @@
 -- 自定义 Roblox UI 库 (HM-UI)
--- 功能：支持窗口、选项卡、按钮、开关、滑块、输入框，带关闭按钮及过渡动画
+-- 功能：支持窗口、选项卡、按钮、开关、滑块、输入框，带最小化/关闭按钮、拖拽功能（含边界限制）及过渡动画
 -- 作者：Grok（基于用户需求生成）
--- 版本：2.5
+-- 版本：2.8
 -- 日期：2025-09-27
--- 说明：简化控制按钮，仅保留关闭按钮，使用代码绘制圆润图形，包含过渡动画
+-- 说明：新增拖拽边界限制，窗口不能拖出屏幕边缘
 
 local CustomUILibrary = {}
 
@@ -109,6 +109,7 @@ function CustomUILibrary:CreateWindow(config)
     window.SubTitle = config.SubTitle or "欢迎使用"
     window.Size = config.Size or UDim2.new(0, 600, 0, 400)
     window.Theme = config.Theme or "Dark"
+    window.IsMinimized = false
 
     -- 创建主 ScreenGui
     local screenGui = Instance.new("ScreenGui")
@@ -143,7 +144,7 @@ function CustomUILibrary:CreateWindow(config)
     titleBar.Parent = mainFrame
 
     local titleLabel = Instance.new("TextLabel")
-    titleLabel.Size = UDim2.new(1, -50, 1, 0) -- 留出关闭按钮空间
+    titleLabel.Size = UDim2.new(1, -100, 1, 0) -- 留出最小化和关闭按钮空间
     titleLabel.Position = UDim2.new(0, 10, 0, 0)
     titleLabel.Text = window.Title .. " - " .. window.SubTitle
     titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -153,27 +154,90 @@ function CustomUILibrary:CreateWindow(config)
     titleLabel.TextXAlignment = Enum.TextXAlignment.Left
     titleLabel.Parent = titleBar
 
+    -- 窗口拖拽功能（含边界限制）
+    local dragging = false
+    local dragStart = nil
+    local startPos = nil
+    local screenSize = workspace.CurrentCamera.ViewportSize
+
+    titleBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            startPos = mainFrame.Position
+        end
+    end)
+
+    titleBar.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local delta = input.Position - dragStart
+            local newX = math.clamp(startPos.X.Offset + delta.X, 0, screenSize.X - mainFrame.AbsoluteSize.X)
+            local newY = math.clamp(startPos.Y.Offset + delta.Y, 0, screenSize.Y - mainFrame.AbsoluteSize.Y)
+            mainFrame.Position = UDim2.new(0, newX, 0, newY)
+        end
+    end)
+
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+
+    -- 最小化按钮（小圆形按钮）
+    local minimizeButton = drawCircularButton(titleBar, 25, Color3.fromRGB(200, 200, 0), Color3.fromRGB(150, 150, 0))
+    minimizeButton.Position = UDim2.new(1, -85, 0.5, -12.5)
+    local minimizeLine = Instance.new("Frame")
+    minimizeLine.Size = UDim2.new(0, 12, 0, 2)
+    minimizeLine.Position = UDim2.new(0.5, -6, 0.5, -1)
+    minimizeLine.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    minimizeLine.Parent = minimizeButton
+    minimizeButton.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            if not window.IsMinimized then
+                -- 最小化：隐藏内容，缩小窗口
+                TweenService:Create(tabContainer, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {Size = UDim2.new(0, 0, 1, -40)}):Play()
+                TweenService:Create(contentFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {Size = UDim2.new(0, 0, 1, -40)}):Play()
+                TweenService:Create(mainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {Size = UDim2.new(0, 200, 0, 40)}):Play()
+                window.IsMinimized = true
+                TweenService:Create(minimizeButton, TweenInfo.new(0.3, Enum.EasingStyle.Sine), {BackgroundColor3 = Color3.fromRGB(150, 150, 0)}):Play()
+            else
+                -- 还原：显示内容，恢复窗口大小
+                TweenService:Create(tabContainer, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {Size = UDim2.new(0, 160, 1, -40)}):Play()
+                TweenService:Create(contentFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {Size = UDim2.new(1, -160, 1, -40)}):Play()
+                TweenService:Create(mainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {Size = window.Size}):Play()
+                window.IsMinimized = false
+                TweenService:Create(minimizeButton, TweenInfo.new(0.3, Enum.EasingStyle.Sine), {BackgroundColor3 = Color3.fromRGB(200, 200, 0)}):Play()
+            end
+        end
+    end)
+
     -- 关闭按钮（小圆形按钮）
     local closeButton = drawCircularButton(titleBar, 25, Color3.fromRGB(200, 0, 0), Color3.fromRGB(150, 0, 0))
     closeButton.Position = UDim2.new(1, -35, 0.5, -12.5)
     local closeX1 = Instance.new("Frame")
     closeX1.Size = UDim2.new(0, 12, 0, 2)
-    closeX1.Position = UDim2.new(0.5, -6, 0.5, -6)
+    closeX1.Position = UDim2.new(0.5, -6, 0.5, -1)
     closeX1.Rotation = 45
     closeX1.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     closeX1.Parent = closeButton
     local closeX2 = Instance.new("Frame")
     closeX2.Size = UDim2.new(0, 12, 0, 2)
-    closeX2.Position = UDim2.new(0.5, -6, 0.5, -6)
+    closeX2.Position = UDim2.new(0.5, -6, 0.5, -1)
     closeX2.Rotation = -45
     closeX2.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     closeX2.Parent = closeButton
-    closeButton.MouseButton1Click:Connect(function()
-        TweenService:Create(closeButton, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {BackgroundColor3 = Color3.fromRGB(255, 50, 50)}):Play()
-        TweenService:Create(closeButton, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {BackgroundColor3 = Color3.fromRGB(200, 0, 0)}):Play()
-        TweenService:Create(mainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {Size = UDim2.new(0, 0, 0, 0)}):Play()
-        wait(0.3)
-        screenGui:Destroy()
+    closeButton.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            -- 关闭动画：颜色变化 + 缩放 + 淡出
+            TweenService:Create(closeButton, TweenInfo.new(0.1, Enum.EasingStyle.Sine), {BackgroundColor3 = Color3.fromRGB(255, 50, 50)}):Play()
+            TweenService:Create(mainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {
+                Size = UDim2.new(0, 0, 0, 0),
+                BackgroundTransparency = 1
+            }):Play()
+            TweenService:Create(closeButton, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {BackgroundColor3 = Color3.fromRGB(200, 0, 0)}):Play()
+            wait(0.3)
+            screenGui:Destroy()
+        end
     end)
 
     -- 选项卡容器
