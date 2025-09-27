@@ -1,9 +1,9 @@
 -- 自定义 Roblox UI 库 (HM-UI)
--- 功能：支持窗口、选项卡、按钮、开关、滑块、输入框，带最小化/关闭按钮、拖拽（有限制）、大小调整（全面兼容 PC/移动）及过渡动画
+-- 功能：支持窗口、选项卡、按钮、开关、滑块、输入框，带最小化/关闭按钮、拖拽（有限制）、大小调整及锁定/解锁功能
 -- 作者：Grok（基于 xAI 提供）
--- 版本：3.9
+-- 版本：4.0
 -- 日期：2025-09-27
--- 说明：统一 UI 大小，优化拖动限制，防止无限偏移
+-- 说明：添加锁定/解锁按钮，优化拖动和调整逻辑
 
 local CustomUILibrary = {}
 
@@ -72,6 +72,7 @@ function CustomUILibrary:CreateWindow(config)
     window.Size = config.Size or UDim2.fromOffset(600, 400) -- 统一默认大小
     window.Theme = config.Theme or "Dark"
     window.IsMinimized = false
+    window.IsLocked = false
     window.MinSize = UDim2.new(0, 300, 0, 200)  -- 最小尺寸
 
     -- 创建主 ScreenGui
@@ -132,16 +133,18 @@ function CustomUILibrary:CreateWindow(config)
     titleBar.InputBegan:Connect(function(input)
         local inputType = input.UserInputType
         if inputType == Enum.UserInputType.MouseButton1 or inputType == Enum.UserInputType.Touch then
-            dragging = true
-            dragStart = input.Position
-            startPos = mainFrame.Position
-            draggingConnection = UserInputService.TouchEnded:Connect(function(touch)
-                dragging = false
-                if draggingConnection then
-                    draggingConnection:Disconnect()
-                    draggingConnection = nil
-                end
-            end)
+            if not window.IsLocked then
+                dragging = true
+                dragStart = input.Position
+                startPos = mainFrame.Position
+                draggingConnection = UserInputService.TouchEnded:Connect(function(touch)
+                    dragging = false
+                    if draggingConnection then
+                        draggingConnection:Disconnect()
+                        draggingConnection = nil
+                    end
+                end)
+            end
         end
     end)
 
@@ -152,8 +155,8 @@ function CustomUILibrary:CreateWindow(config)
             local newX = startPos.X.Offset + delta.X
             local newY = startPos.Y.Offset + delta.Y
             -- 限制拖动范围在屏幕内
-            newX = math.max(-mainFrame.Size.X.Offset, math.min(newX, screenSize.X))
-            newY = math.max(-mainFrame.Size.Y.Offset, math.min(newY, screenSize.Y))
+            newX = math.max(0, math.min(newX, screenSize.X - mainFrame.Size.X.Offset))
+            newY = math.max(0, math.min(newY, screenSize.Y - mainFrame.Size.Y.Offset))
             mainFrame.Position = UDim2.new(0, newX, 0, newY)
         end
     end)
@@ -211,8 +214,8 @@ function CustomUILibrary:CreateWindow(config)
     resizeHandle.Parent = mainFrame
 
     -- 窗口大小调整功能（优化移动端响应）
-    local resizing = false
     local resizingConnection = nil
+    local resizing = false
     local resizeStart = nil
     local startSize = nil
     local startPos = nil
@@ -220,17 +223,19 @@ function CustomUILibrary:CreateWindow(config)
     resizeHandle.InputBegan:Connect(function(input)
         local inputType = input.UserInputType
         if inputType == Enum.UserInputType.MouseButton1 or inputType == Enum.UserInputType.Touch then
-            resizing = true
-            resizeStart = input.Position
-            startSize = mainFrame.Size
-            startPos = mainFrame.Position
-            resizingConnection = UserInputService.TouchEnded:Connect(function(touch)
-                resizing = false
-                if resizingConnection then
-                    resizingConnection:Disconnect()
-                    resizingConnection = nil
-                end
-            end)
+            if not window.IsLocked then
+                resizing = true
+                resizeStart = input.Position
+                startSize = mainFrame.Size
+                startPos = mainFrame.Position
+                resizingConnection = UserInputService.TouchEnded:Connect(function(touch)
+                    resizing = false
+                    if resizingConnection then
+                        resizingConnection:Disconnect()
+                        resizingConnection = nil
+                    end
+                end)
+            end
         end
     end)
 
@@ -311,8 +316,8 @@ function CustomUILibrary:CreateWindow(config)
         local inputType = input.UserInputType
         if minDragging and (inputType == Enum.UserInputType.MouseMovement or inputType == Enum.UserInputType.Touch) then
             local delta = input.Position - minDragStart
-            local newX = math.max(0, minStartPos.X.Offset + delta.X) -- 限制左边界
-            local newY = math.max(0, minStartPos.Y.Offset + delta.Y) -- 限制上边界
+            local newX = math.max(0, minStartPos.X.Offset + delta.X)
+            local newY = math.max(0, minStartPos.Y.Offset + delta.Y)
             minimizeButton.Position = UDim2.new(0, newX, 0, newY)
         end
     end)
@@ -328,6 +333,65 @@ function CustomUILibrary:CreateWindow(config)
             minimizeButton.Text = "-"
             window.IsMinimized = false
             TweenService:Create(minimizeButton, TweenInfo.new(0.3, Enum.EasingStyle.Sine), {BackgroundColor3 = Color3.fromRGB(200, 200, 0)}):Play()
+        end
+    end)
+
+    -- 可拖动锁定/解锁按钮
+    local lockButton = Instance.new("TextButton")
+    lockButton.Size = UDim2.new(0, 40, 0, 40)
+    lockButton.Position = UDim2.new(0, 70, 0, 20) -- 右侧最小化按钮
+    lockButton.BackgroundColor3 = Color3.fromRGB(0, 150, 0) -- 绿色表示解锁
+    lockButton.BackgroundTransparency = 0.2
+    lockButton.Text = "🔓" -- 初始解锁状态
+    lockButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    lockButton.TextSize = 20
+    lockButton.Font = Enum.Font.GothamBold
+    applyCorner(lockButton, 20)
+    lockButton.Parent = screenGui
+    lockButton.Visible = true
+
+    local lockDragging = false
+    local lockDragStart = nil
+    local lockStartPos = nil
+
+    lockButton.InputBegan:Connect(function(input)
+        local inputType = input.UserInputType
+        if inputType == Enum.UserInputType.MouseButton1 or inputType == Enum.UserInputType.Touch then
+            lockDragging = true
+            lockDragStart = input.Position
+            lockStartPos = lockButton.Position
+            local dragConnection = UserInputService.TouchEnded:Connect(function(touch)
+                lockDragging = false
+                if dragConnection then
+                    dragConnection:Disconnect()
+                    dragConnection = nil
+                end
+            end)
+        end
+    end)
+
+    lockButton.InputChanged:Connect(function(input)
+        local inputType = input.UserInputType
+        if lockDragging and (inputType == Enum.UserInputType.MouseMovement or inputType == Enum.UserInputType.Touch) then
+            local delta = input.Position - lockDragStart
+            local newX = math.max(0, lockStartPos.X.Offset + delta.X)
+            local newY = math.max(0, lockStartPos.Y.Offset + delta.Y)
+            lockButton.Position = UDim2.new(0, newX, 0, newY)
+        end
+    end)
+
+    lockButton.MouseButton1Click:Connect(function()
+        window.IsLocked = not window.IsLocked
+        if window.IsLocked then
+            lockButton.Text = "🔒"
+            lockButton.BackgroundColor3 = Color3.fromRGB(150, 0, 0) -- 红色表示锁定
+            TweenService:Create(lockButton, TweenInfo.new(0.3, Enum.EasingStyle.Sine), {BackgroundColor3 = Color3.fromRGB(200, 0, 0)}):Play()
+            if draggingConnection then draggingConnection:Disconnect() end
+            if resizingConnection then resizingConnection:Disconnect() end
+        else
+            lockButton.Text = "🔓"
+            lockButton.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+            TweenService:Create(lockButton, TweenInfo.new(0.3, Enum.EasingStyle.Sine), {BackgroundColor3 = Color3.fromRGB(0, 200, 0)}):Play()
         end
     end)
 
