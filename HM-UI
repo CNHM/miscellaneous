@@ -1,9 +1,9 @@
 -- 自定义 Roblox UI 库 (HM-UI)
 -- 功能：支持窗口、选项卡、按钮、开关、滑块、输入框，带最小化/关闭按钮、拖拽（含边界）、大小调整（全面兼容 PC/移动）及过渡动画
 -- 作者：Grok（基于用户需求生成）
--- 版本：3.5
+-- 版本：3.6
 -- 日期：2025-09-27
--- 说明：优化最小化按钮响应，关闭动画改为四角收缩，最小化/关闭按钮调整为圆形贴近文本
+-- 说明：最小化按钮改为可拖动小圆（- 隐藏，+ 显示），去除玻璃质感模糊效果，修复状态切换 bug
 
 local CustomUILibrary = {}
 
@@ -18,28 +18,6 @@ local function applyCorner(instance, radius)
     corner.Parent = instance
 end
 
--- 工具函数：创建玻璃质感模糊效果（带兼容性检查）
-local function applyBlur(parent, window)
-    local success, result = pcall(function()
-        return Instance.new("UIBlurEffect")
-    end)
-    if success then
-        local blur = Instance.new("UIBlurEffect")
-        blur.Size = 24
-        blur.Parent = parent
-    else
-        parent.BackgroundTransparency = 0.3
-        warn("UIBlurEffect 不可用，已使用透明背景替代。")
-        if window and window.Notify then
-            window:Notify({
-                Title = "兼容性提示",
-                Content = "当前环境不支持模糊效果，已切换至透明背景。",
-                Duration = 5
-            })
-        end
-    end
-end
-
 -- 通知方法（全局定义）
 function CustomUILibrary:Notify(notifyConfig)
     local window = self
@@ -51,7 +29,6 @@ function CustomUILibrary:Notify(notifyConfig)
     notifyFrame.BackgroundColor3 = window.Theme == "Dark" and Color3.fromRGB(20, 20, 20) or Color3.fromRGB(220, 220, 220)
     notifyFrame.BackgroundTransparency = 0.2
     applyCorner(notifyFrame, 8)
-    applyBlur(notifyFrame, window)
     notifyFrame.Parent = window.screenGui
 
     local notifyTitle = Instance.new("TextLabel")
@@ -113,7 +90,6 @@ function CustomUILibrary:CreateWindow(config)
     mainFrame.BorderSizePixel = 0
     mainFrame.ClipsDescendants = true
     applyCorner(mainFrame, 12)
-    applyBlur(mainFrame, window)
     mainFrame.Parent = screenGui
 
     -- 窗口出现动画
@@ -130,7 +106,7 @@ function CustomUILibrary:CreateWindow(config)
     titleBar.Parent = mainFrame
 
     local titleLabel = Instance.new("TextLabel")
-    titleLabel.Size = UDim2.new(1, -90, 1, 0) -- 调整空间以适应新按钮布局
+    titleLabel.Size = UDim2.new(1, -10, 1, 0) -- 移除最小化按钮占用的空间
     titleLabel.Position = UDim2.new(0, 10, 0, 0)
     titleLabel.Text = window.Title .. " - " .. window.SubTitle
     titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -173,55 +149,22 @@ function CustomUILibrary:CreateWindow(config)
         end
     end)
 
-    -- 最小化按钮（圆形，文本 -，优化响应）
-    local minimizeButton = Instance.new("TextButton")
-    minimizeButton.Size = UDim2.new(0, 30, 0, 30) -- 调整为圆形 30x30
-    minimizeButton.Position = UDim2.new(1, -75, 0.5, -15) -- 贴近文本，调整位置
-    minimizeButton.BackgroundColor3 = Color3.fromRGB(200, 200, 0)
-    minimizeButton.BackgroundTransparency = 0.2
-    minimizeButton.Text = "-"
-    minimizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    minimizeButton.TextSize = 18
-    minimizeButton.Font = Enum.Font.GothamBold
-    applyCorner(minimizeButton, 15) -- 使按钮圆形
-    minimizeButton.Parent = titleBar
-
-    minimizeButton.InputBegan:Connect(function(input)
-        local inputType = input.UserInputType
-        if inputType == Enum.UserInputType.MouseButton1 or inputType == Enum.UserInputType.Touch then
-            if not window.IsMinimized then
-                TweenService:Create(tabContainer, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {Size = UDim2.new(0, 0, 1, -40)}):Play()
-                TweenService:Create(contentFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {Size = UDim2.new(0, 0, 1, -40)}):Play()
-                TweenService:Create(mainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {Size = UDim2.new(0, 200, 0, 40)}):Play()
-                window.IsMinimized = true
-                TweenService:Create(minimizeButton, TweenInfo.new(0.3, Enum.EasingStyle.Sine), {BackgroundColor3 = Color3.fromRGB(150, 150, 0)}):Play()
-            else
-                TweenService:Create(tabContainer, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {Size = UDim2.new(0, 160, 1, -40)}):Play()
-                TweenService:Create(contentFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {Size = UDim2.new(1, -160, 1, -40)}):Play()
-                TweenService:Create(mainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {Size = window.Size}):Play()
-                window.IsMinimized = false
-                TweenService:Create(minimizeButton, TweenInfo.new(0.3, Enum.EasingStyle.Sine), {BackgroundColor3 = Color3.fromRGB(200, 200, 0)}):Play()
-            end
-        end
-    end)
-
-    -- 关闭按钮（圆形，文本 ×，优化响应）
+    -- 关闭按钮（圆形，文本 ×）
     local closeButton = Instance.new("TextButton")
-    closeButton.Size = UDim2.new(0, 30, 0, 30) -- 调整为圆形 30x30
-    closeButton.Position = UDim2.new(1, -35, 0.5, -15) -- 贴近文本，调整位置
+    closeButton.Size = UDim2.new(0, 30, 0, 30)
+    closeButton.Position = UDim2.new(1, -40, 0.5, -15)
     closeButton.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
     closeButton.BackgroundTransparency = 0.2
     closeButton.Text = "×"
     closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
     closeButton.TextSize = 18
     closeButton.Font = Enum.Font.GothamBold
-    applyCorner(closeButton, 15) -- 使按钮圆形
+    applyCorner(closeButton, 15)
     closeButton.Parent = titleBar
 
     closeButton.InputBegan:Connect(function(input)
         local inputType = input.UserInputType
         if inputType == Enum.UserInputType.MouseButton1 or inputType == Enum.UserInputType.Touch then
-            -- 四角向中间收缩动画
             local initialSize = mainFrame.Size
             local initialPosition = mainFrame.Position
             local centerX = initialPosition.X.Offset + initialSize.X.Offset / 2
@@ -301,7 +244,6 @@ function CustomUILibrary:CreateWindow(config)
     tabContainer.BackgroundColor3 = window.Theme == "Dark" and Color3.fromRGB(25, 25, 25) or Color3.fromRGB(210, 210, 210)
     tabContainer.BackgroundTransparency = 0.3
     applyCorner(tabContainer, 8)
-    applyBlur(tabContainer, window)
     tabContainer.Parent = mainFrame
 
     local tabListLayout = Instance.new("UIListLayout")
@@ -316,12 +258,69 @@ function CustomUILibrary:CreateWindow(config)
     contentFrame.BackgroundColor3 = window.Theme == "Dark" and Color3.fromRGB(30, 30, 30) or Color3.fromRGB(230, 230, 230)
     contentFrame.BackgroundTransparency = 0.3
     applyCorner(contentFrame, 8)
-    applyBlur(contentFrame, window)
     contentFrame.Parent = mainFrame
 
     -- 存储选项卡
     window.Tabs = {}
     window.CurrentTab = nil
+
+    -- 可拖动最小化按钮
+    local minimizeButton = Instance.new("TextButton")
+    minimizeButton.Size = UDim2.new(0, 40, 0, 40)
+    minimizeButton.Position = UDim2.new(0, 20, 0, 20) -- 初始位置
+    minimizeButton.BackgroundColor3 = Color3.fromRGB(200, 200, 0)
+    minimizeButton.BackgroundTransparency = 0.2
+    minimizeButton.Text = "-"
+    minimizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    minimizeButton.TextSize = 20
+    minimizeButton.Font = Enum.Font.GothamBold
+    applyCorner(minimizeButton, 20)
+    minimizeButton.Parent = screenGui
+    minimizeButton.Visible = true
+
+    local minDragging = false
+    local minDragStart = nil
+    local minStartPos = nil
+
+    minimizeButton.InputBegan:Connect(function(input)
+        local inputType = input.UserInputType
+        if inputType == Enum.UserInputType.MouseButton1 or inputType == Enum.UserInputType.Touch then
+            minDragging = true
+            minDragStart = input.Position
+            minStartPos = minimizeButton.Position
+            local dragConnection = UserInputService.TouchEnded:Connect(function(touch)
+                minDragging = false
+                if dragConnection then
+                    dragConnection:Disconnect()
+                    dragConnection = nil
+                end
+            end)
+        end
+    end)
+
+    minimizeButton.InputChanged:Connect(function(input)
+        local inputType = input.UserInputType
+        if minDragging and (inputType == Enum.UserInputType.MouseMovement or inputType == Enum.UserInputType.Touch) then
+            local delta = input.Position - minDragStart
+            local newX = math.clamp(minStartPos.X.Offset + delta.X, 0, screenSize.X - minimizeButton.AbsoluteSize.X)
+            local newY = math.clamp(minStartPos.Y.Offset + delta.Y, 0, screenSize.Y - minimizeButton.AbsoluteSize.Y)
+            minimizeButton.Position = UDim2.new(0, newX, 0, newY)
+        end
+    end)
+
+    minimizeButton.MouseButton1Click:Connect(function()
+        if not window.IsMinimized then
+            mainFrame.Visible = false
+            minimizeButton.Text = "+"
+            window.IsMinimized = true
+            TweenService:Create(minimizeButton, TweenInfo.new(0.3, Enum.EasingStyle.Sine), {BackgroundColor3 = Color3.fromRGB(150, 150, 0)}):Play()
+        else
+            mainFrame.Visible = true
+            minimizeButton.Text = "-"
+            window.IsMinimized = false
+            TweenService:Create(minimizeButton, TweenInfo.new(0.3, Enum.EasingStyle.Sine), {BackgroundColor3 = Color3.fromRGB(200, 200, 0)}):Play()
+        end
+    end)
 
     -- 创建选项卡方法
     function window:Tab(tabConfig)
