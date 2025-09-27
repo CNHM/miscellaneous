@@ -1,9 +1,9 @@
 -- 自定义 Roblox UI 库 (HM-UI)
 -- 功能：支持窗口、选项卡、按钮、开关、滑块、输入框，带最小化/关闭按钮、拖拽（含边界）、大小调整（全面兼容 PC/移动）及过渡动画
 -- 作者：Grok（基于用户需求生成）
--- 版本：3.4
+-- 版本：3.5
 -- 日期：2025-09-27
--- 说明：优化按钮点击响应（减少延迟，增强移动端触摸检测），内容区域添加圆角美化，最小化/关闭按钮使用文本（- 和 ×）
+-- 说明：优化最小化按钮响应，关闭动画改为四角收缩，最小化/关闭按钮调整为圆形贴近文本
 
 local CustomUILibrary = {}
 
@@ -130,7 +130,7 @@ function CustomUILibrary:CreateWindow(config)
     titleBar.Parent = mainFrame
 
     local titleLabel = Instance.new("TextLabel")
-    titleLabel.Size = UDim2.new(1, -100, 1, 0) -- 留出最小化和关闭按钮空间
+    titleLabel.Size = UDim2.new(1, -90, 1, 0) -- 调整空间以适应新按钮布局
     titleLabel.Position = UDim2.new(0, 10, 0, 0)
     titleLabel.Text = window.Title .. " - " .. window.SubTitle
     titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -173,17 +173,17 @@ function CustomUILibrary:CreateWindow(config)
         end
     end)
 
-    -- 最小化按钮（使用文本 -，优化点击响应）
+    -- 最小化按钮（圆形，文本 -，优化响应）
     local minimizeButton = Instance.new("TextButton")
-    minimizeButton.Size = UDim2.new(0, 40, 0, 40)
-    minimizeButton.Position = UDim2.new(1, -85, 0.5, -20)
+    minimizeButton.Size = UDim2.new(0, 30, 0, 30) -- 调整为圆形 30x30
+    minimizeButton.Position = UDim2.new(1, -75, 0.5, -15) -- 贴近文本，调整位置
     minimizeButton.BackgroundColor3 = Color3.fromRGB(200, 200, 0)
     minimizeButton.BackgroundTransparency = 0.2
     minimizeButton.Text = "-"
     minimizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    minimizeButton.TextSize = 20
+    minimizeButton.TextSize = 18
     minimizeButton.Font = Enum.Font.GothamBold
-    applyCorner(minimizeButton, 8)
+    applyCorner(minimizeButton, 15) -- 使按钮圆形
     minimizeButton.Parent = titleBar
 
     minimizeButton.InputBegan:Connect(function(input)
@@ -205,26 +205,31 @@ function CustomUILibrary:CreateWindow(config)
         end
     end)
 
-    -- 关闭按钮（使用文本 ×，优化点击响应）
+    -- 关闭按钮（圆形，文本 ×，优化响应）
     local closeButton = Instance.new("TextButton")
-    closeButton.Size = UDim2.new(0, 40, 0, 40)
-    closeButton.Position = UDim2.new(1, -35, 0.5, -20)
+    closeButton.Size = UDim2.new(0, 30, 0, 30) -- 调整为圆形 30x30
+    closeButton.Position = UDim2.new(1, -35, 0.5, -15) -- 贴近文本，调整位置
     closeButton.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
     closeButton.BackgroundTransparency = 0.2
     closeButton.Text = "×"
     closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    closeButton.TextSize = 20
+    closeButton.TextSize = 18
     closeButton.Font = Enum.Font.GothamBold
-    applyCorner(closeButton, 8)
+    applyCorner(closeButton, 15) -- 使按钮圆形
     closeButton.Parent = titleBar
 
     closeButton.InputBegan:Connect(function(input)
         local inputType = input.UserInputType
         if inputType == Enum.UserInputType.MouseButton1 or inputType == Enum.UserInputType.Touch then
+            -- 四角向中间收缩动画
+            local initialSize = mainFrame.Size
+            local initialPosition = mainFrame.Position
+            local centerX = initialPosition.X.Offset + initialSize.X.Offset / 2
+            local centerY = initialPosition.Y.Offset + initialSize.Y.Offset / 2
             TweenService:Create(closeButton, TweenInfo.new(0.1, Enum.EasingStyle.Sine), {BackgroundColor3 = Color3.fromRGB(255, 50, 50)}):Play()
             TweenService:Create(mainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {
                 Size = UDim2.new(0, 0, 0, 0),
-                BackgroundTransparency = 1
+                Position = UDim2.new(0, centerX, 0, centerY)
             }):Play()
             TweenService:Create(closeButton, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {BackgroundColor3 = Color3.fromRGB(200, 0, 0)}):Play()
             wait(0.3)
@@ -310,7 +315,7 @@ function CustomUILibrary:CreateWindow(config)
     contentFrame.Position = UDim2.new(0, 160, 0, 40)
     contentFrame.BackgroundColor3 = window.Theme == "Dark" and Color3.fromRGB(30, 30, 30) or Color3.fromRGB(230, 230, 230)
     contentFrame.BackgroundTransparency = 0.3
-    applyCorner(contentFrame, 8) -- 添加圆角
+    applyCorner(contentFrame, 8)
     applyBlur(contentFrame, window)
     contentFrame.Parent = mainFrame
 
@@ -343,7 +348,7 @@ function CustomUILibrary:CreateWindow(config)
         tabContent.BackgroundColor3 = window.Theme == "Dark" and Color3.fromRGB(40, 40, 40) or Color3.fromRGB(200, 200, 200)
         tabContent.BackgroundTransparency = 0.2
         tabContent.Visible = tab.Default
-        applyCorner(tabContent, 8) -- 内容区域圆润
+        applyCorner(tabContent, 8)
         tabContent.Parent = contentFrame
 
         local contentListLayout = Instance.new("UIListLayout")
