@@ -1,9 +1,9 @@
 -- 自定义 Roblox UI 库 (HM-UI)
--- 功能：支持窗口、选项卡、按钮、开关、滑块、输入框，带最小化/关闭按钮、拖拽功能（含边界限制）及过渡动画
+-- 功能：支持窗口、选项卡、按钮、开关、滑块、输入框，带最小化/关闭按钮、拖拽（含边界）、大小调整及过渡动画
 -- 作者：Grok（基于用户需求生成）
--- 版本：2.8
+-- 版本：2.9
 -- 日期：2025-09-27
--- 说明：新增拖拽边界限制，窗口不能拖出屏幕边缘
+-- 说明：修复按钮点击响应（兼容 PC/移动），新增右下角拖拽调整大小，组件自适应
 
 local CustomUILibrary = {}
 
@@ -137,7 +137,7 @@ function CustomUILibrary:CreateWindow(config)
 
     -- 标题栏
     local titleBar = Instance.new("Frame")
-    titleBar.Size = UDim2.new(1, 0, 0, 40)
+    titleBar.Size = UDim2.new(1, 0, 0, 0, 40)
     titleBar.BackgroundColor3 = window.Theme == "Dark" and Color3.fromRGB(15, 15, 15) or Color3.fromRGB(200, 200, 200)
     titleBar.BackgroundTransparency = 0.2
     applyCorner(titleBar, 8)
@@ -161,7 +161,7 @@ function CustomUILibrary:CreateWindow(config)
     local screenSize = workspace.CurrentCamera.ViewportSize
 
     titleBar.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
             dragStart = input.Position
             startPos = mainFrame.Position
@@ -169,7 +169,7 @@ function CustomUILibrary:CreateWindow(config)
     end)
 
     titleBar.InputChanged:Connect(function(input)
-        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
             local delta = input.Position - dragStart
             local newX = math.clamp(startPos.X.Offset + delta.X, 0, screenSize.X - mainFrame.AbsoluteSize.X)
             local newY = math.clamp(startPos.Y.Offset + delta.Y, 0, screenSize.Y - mainFrame.AbsoluteSize.Y)
@@ -178,7 +178,7 @@ function CustomUILibrary:CreateWindow(config)
     end)
 
     UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = false
         end
     end)
@@ -191,23 +191,21 @@ function CustomUILibrary:CreateWindow(config)
     minimizeLine.Position = UDim2.new(0.5, -6, 0.5, -1)
     minimizeLine.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     minimizeLine.Parent = minimizeButton
-    minimizeButton.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            if not window.IsMinimized then
-                -- 最小化：隐藏内容，缩小窗口
-                TweenService:Create(tabContainer, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {Size = UDim2.new(0, 0, 1, -40)}):Play()
-                TweenService:Create(contentFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {Size = UDim2.new(0, 0, 1, -40)}):Play()
-                TweenService:Create(mainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {Size = UDim2.new(0, 200, 0, 40)}):Play()
-                window.IsMinimized = true
-                TweenService:Create(minimizeButton, TweenInfo.new(0.3, Enum.EasingStyle.Sine), {BackgroundColor3 = Color3.fromRGB(150, 150, 0)}):Play()
-            else
-                -- 还原：显示内容，恢复窗口大小
-                TweenService:Create(tabContainer, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {Size = UDim2.new(0, 160, 1, -40)}):Play()
-                TweenService:Create(contentFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {Size = UDim2.new(1, -160, 1, -40)}):Play()
-                TweenService:Create(mainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {Size = window.Size}):Play()
-                window.IsMinimized = false
-                TweenService:Create(minimizeButton, TweenInfo.new(0.3, Enum.EasingStyle.Sine), {BackgroundColor3 = Color3.fromRGB(200, 200, 0)}):Play()
-            end
+    minimizeButton.MouseButton1Click:Connect(function()
+        if not window.IsMinimized then
+            -- 最小化：隐藏内容，缩小窗口
+            TweenService:Create(tabContainer, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {Size = UDim2.new(0, 0, 1, -40)}):Play()
+            TweenService:Create(contentFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {Size = UDim2.new(0, 0, 1, -40)}):Play()
+            TweenService:Create(mainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {Size = UDim2.new(0, 200, 0, 40)}):Play()
+            window.IsMinimized = true
+            TweenService:Create(minimizeButton, TweenInfo.new(0.3, Enum.EasingStyle.Sine), {BackgroundColor3 = Color3.fromRGB(150, 150, 0)}):Play()
+        else
+            -- 还原：显示内容，恢复窗口大小
+            TweenService:Create(tabContainer, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {Size = UDim2.new(0, 160, 1, -40)}):Play()
+            TweenService:Create(contentFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {Size = UDim2.new(1, -160, 1, -40)}):Play()
+            TweenService:Create(mainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {Size = window.Size}):Play()
+            window.IsMinimized = false
+            TweenService:Create(minimizeButton, TweenInfo.new(0.3, Enum.EasingStyle.Sine), {BackgroundColor3 = Color3.fromRGB(200, 200, 0)}):Play()
         end
     end)
 
@@ -226,17 +224,69 @@ function CustomUILibrary:CreateWindow(config)
     closeX2.Rotation = -45
     closeX2.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     closeX2.Parent = closeButton
-    closeButton.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            -- 关闭动画：颜色变化 + 缩放 + 淡出
-            TweenService:Create(closeButton, TweenInfo.new(0.1, Enum.EasingStyle.Sine), {BackgroundColor3 = Color3.fromRGB(255, 50, 50)}):Play()
-            TweenService:Create(mainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {
-                Size = UDim2.new(0, 0, 0, 0),
-                BackgroundTransparency = 1
-            }):Play()
-            TweenService:Create(closeButton, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {BackgroundColor3 = Color3.fromRGB(200, 0, 0)}):Play()
-            wait(0.3)
-            screenGui:Destroy()
+    closeButton.MouseButton1Click:Connect(function()
+        -- 关闭动画：颜色变化 + 缩放 + 淡出
+        TweenService:Create(closeButton, TweenInfo.new(0.1, Enum.EasingStyle.Sine), {BackgroundColor3 = Color3.fromRGB(255, 50, 50)}):Play()
+        TweenService:Create(mainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {
+            Size = UDim2.new(0, 0, 0, 0),
+            BackgroundTransparency = 1
+        }):Play()
+        TweenService:Create(closeButton, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {BackgroundColor3 = Color3.fromRGB(200, 0, 0)}):Play()
+        wait(0.3)
+        screenGui:Destroy()
+    end)
+
+    -- 大小调整把手（右下角小三角）
+    local resizeHandle = Instance.new("Frame")
+    resizeHandle.Size = UDim2.new(0, 20, 0, 20)
+    resizeHandle.Position = UDim2.new(1, -20, 1, -20)
+    resizeHandle.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+    resizeHandle.BackgroundTransparency = 0.5
+    applyCorner(resizeHandle, 2)
+    local resizeLine1 = Instance.new("Frame")
+    resizeLine1.Size = UDim2.new(0, 14, 0, 2)
+    resizeLine1.Position = UDim2.new(0, 3, 0, 3)
+    resizeLine1.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    resizeLine1.Rotation = 45
+    resizeLine1.Parent = resizeHandle
+    local resizeLine2 = Instance.new("Frame")
+    resizeLine2.Size = UDim2.new(0, 14, 0, 2)
+    resizeLine2.Position = UDim2.new(0, 3, 0, 9)
+    resizeLine2.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    resizeLine2.Rotation = 45
+    resizeLine2.Parent = resizeHandle
+    resizeHandle.Parent = mainFrame
+
+    -- 窗口大小调整功能（兼容 PC/移动）
+    local resizing = false
+    local resizeStart = nil
+    local startSize = nil
+    local startPos = nil
+
+    resizeHandle.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            resizing = true
+            resizeStart = input.Position
+            startSize = mainFrame.Size
+            startPos = mainFrame.Position
+        end
+    end)
+
+    resizeHandle.InputChanged:Connect(function(input)
+        if resizing and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local delta = input.Position - resizeStart
+            local newWidth = math.max(300, startSize.X.Offset + delta.X)  -- 最小宽度 300
+            local newHeight = math.max(200, startSize.Y.Offset + delta.Y)  -- 最小高度 200
+            mainFrame.Size = UDim2.new(0, newWidth, 0, newHeight)
+            -- 自适应：调整选项卡和内容宽度
+            tabContainer.Size = UDim2.new(0, 160, 1, -40)
+            contentFrame.Size = UDim2.new(1, -160, 1, -40)
+        end
+    end)
+
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            resizing = false
         end
     end)
 
@@ -503,7 +553,7 @@ function CustomUILibrary:CreateWindow(config)
             updateSlider(slider.Default)
 
             sliderKnob.InputBegan:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                     local dragging = true
                     local startPos = UserInputService:GetMouseLocation().X
                     local startValue = slider.Default
@@ -519,7 +569,7 @@ function CustomUILibrary:CreateWindow(config)
 
                     UserInputService.InputChanged:Connect(update)
                     sliderKnob.InputEnded:Connect(function(input)
-                        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                             dragging = false
                         end
                     end)
