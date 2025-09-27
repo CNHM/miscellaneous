@@ -1,0 +1,511 @@
+--!strict
+local HM_UI = {}
+HM_UI.Components = {}
+
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local ContextActionService = game:GetService("ContextActionService")
+
+-- 样式常量
+HM_UI.Style = {
+    WindowColor = Color3.fromRGB(40, 40, 40),
+    ButtonColor = Color3.fromRGB(60, 60, 60),
+    AccentColor = Color3.fromRGB(0, 150, 255),
+    BorderColor = Color3.fromRGB(20, 20, 20),
+    TextColor = Color3.new(1, 1, 1),
+    Font = Enum.Font.SourceSans
+}
+
+-- 实用函数：创建基础UI元素
+function HM_UI:CreateElement(className: string, properties: {[string]: any})
+    local element = Instance.new(className)
+    for prop, value in properties do
+        element[prop] = value
+    end
+    return element
+end
+
+-- 全局状态和枚举
+local activeDragWindow = nil
+local activeResizeWindow = nil
+
+local WindowState = {
+    Open = 1,
+    Minimized = 2,
+    Locked = 3
+}
+
+-- 全局输入处理
+local function InitGlobalInput()
+    if HM_UI._InputInitialized then return end
+    HM_UI._InputInitialized = true
+
+    UserInputService.InputChanged:Connect(function(input)
+        if input.UserInputType ~= Enum.UserInputType.MouseMovement and input.UserInputType ~= Enum.UserInputType.Touch then
+            return
+        end
+
+        local currentPos = UserInputService:GetMouseLocation()
+        if not currentPos then return end
+
+        if activeDragWindow and activeDragWindow.State ~= WindowState.Locked then
+            local Window = activeDragWindow.Frame
+            local delta = currentPos - activeDragWindow.DragStartPos
+            local newX = activeDragWindow.DragStartOffset.X + delta.X
+            local newY = activeDragWindow.DragStartOffset.Y + delta.Y
+            
+            local viewportSize = workspace.CurrentCamera.ViewportSize
+            
+            newX = math.max(0, math.min(newX, viewportSize.X - Window.AbsoluteSize.X))
+            newY = math.max(0, math.min(newY, viewportSize.Y - Window.AbsoluteSize.Y))
+            
+            Window.Position = UDim2.new(0, newX, 0, newY)
+
+        elseif activeResizeWindow and activeResizeWindow.State ~= WindowState.Locked then
+            local Window = activeResizeWindow.Frame
+            local delta = currentPos - activeResizeWindow.DragStartPos
+            local dragStartSize = activeResizeWindow.DragStartSize
+
+            local newWidth = math.max(200, dragStartSize.X + delta.X)
+            local newHeight = math.max(100, dragStartSize.Y + delta.Y)
+            
+            Window.Size = UDim2.new(0, newWidth, 0, newHeight)
+            Window.Content.Size = UDim2.new(1, 0, 1, -25)
+        end
+    end)
+    
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            activeDragWindow = nil
+            activeResizeWindow = nil
+        end
+    end)
+end
+
+InitGlobalInput()
+
+-- ====================================================================
+-- 1. 核心组件：窗口 (Window)
+-- ====================================================================
+
+function HM_UI.Components.Window(title: string, parent: GuiBase, position: UDim2, size: UDim2)
+    local Window = HM_UI:CreateElement("Frame", {
+        Name = "Window_" .. title:gsub("%s", ""),
+        Size = size,
+        Position = position,
+        BackgroundColor3 = HM_UI.Style.WindowColor,
+        BorderSizePixel = 1,
+        BorderColor3 = HM_UI.Style.BorderColor,
+        Parent = parent
+    })
+
+    local self = {
+        Frame = Window,
+        State = WindowState.Open,
+        MinSize = UDim2.new(0, size.X.Offset, 0, 25),
+        OriginalSize = size,
+        OriginalPos = position,
+        DragStartPos = Vector2.new(0, 0),
+        DragStartOffset = Vector2.new(0, 0),
+        DragStartSize = Vector2.new(0, 0)
+    }
+
+    local TitleBar = HM_UI:CreateElement("Frame", {
+        Name = "TitleBar",
+        Size = UDim2.new(1, 0, 0, 25),
+        BackgroundColor3 = HM_UI.Style.AccentColor,
+        Parent = Window
+    })
+
+    HM_UI:CreateElement("TextLabel", {
+        Name = "Title",
+        Size = UDim2.new(1, -75, 1, 0),
+        Text = title,
+        TextColor3 = HM_UI.Style.TextColor,
+        TextScaled = true,
+        BackgroundColor3 = HM_UI.Style.AccentColor,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Padding = UDim.new(0, 5),
+        Parent = TitleBar
+    })
+
+    local ContentFrame = HM_UI:CreateElement("ScrollingFrame", {
+        Name = "ContentFrame",
+        Size = UDim2.new(1, 0, 1, -25),
+        Position = UDim2.new(0, 0, 0, 25),
+        BackgroundColor3 = HM_UI.Style.WindowColor,
+        BorderSizePixel = 0,
+        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+        ScrollBarImageColor3 = HM_UI.Style.AccentColor,
+        Parent = Window
+    })
+    
+    Window.Content = ContentFrame
+
+    -- 拖拽逻辑
+    TitleBar.InputBegan:Connect(function(input, gameProcessedEvent)
+        if gameProcessedEvent or self.State == WindowState.Locked then return end
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            activeDragWindow = self
+            self.DragStartPos = UserInputService:GetMouseLocation() or input.Position
+            self.DragStartOffset = Vector2.new(Window.Position.X.Offset, Window.Position.Y.Offset)
+        end
+    end)
+
+    -- 最小化/还原按钮
+    local MinButton = HM_UI:CreateElement("TextButton", {
+        Name = "MinButton",
+        Size = UDim2.new(0, 25, 1, 0),
+        Position = UDim2.new(1, -75, 0, 0),
+        Text = "_",
+        TextColor3 = HM_UI.Style.TextColor,
+        BackgroundColor3 = Color3.fromRGB(80, 80, 80),
+        Parent = TitleBar
+    })
+    
+    MinButton.MouseButton1Click:Connect(function()
+        if self.State == WindowState.Open then
+            self.State = WindowState.Minimized
+            self.OriginalSize = Window.Size
+            ContentFrame.Visible = false
+            TweenService:Create(Window, TweenInfo.new(0.2), {Size = self.MinSize}):Play()
+            MinButton.Text = "[]"
+        else
+            self.State = WindowState.Open
+            ContentFrame.Visible = true
+            TweenService:Create(Window, TweenInfo.new(0.2), {Size = self.OriginalSize}):Play()
+            MinButton.Text = "_"
+        end
+    end)
+    
+    -- 锁定/解锁按钮
+    local LockButton = HM_UI:CreateElement("TextButton", {
+        Name = "LockButton",
+        Size = UDim2.new(0, 25, 1, 0),
+        Position = UDim2.new(1, -50, 0, 0),
+        Text = "🔓",
+        TextColor3 = HM_UI.Style.TextColor,
+        BackgroundColor3 = Color3.fromRGB(80, 80, 80),
+        Parent = TitleBar
+    })
+    
+    LockButton.MouseButton1Click:Connect(function()
+        if self.State == WindowState.Locked then
+            self.State = WindowState.Open
+            LockButton.Text = "🔓"
+            LockButton.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+        else
+            self.State = WindowState.Locked
+            LockButton.Text = "🔒"
+            LockButton.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
+        end
+    end)
+
+    -- 关闭按钮
+    local CloseButton = HM_UI:CreateElement("TextButton", {
+        Name = "CloseButton",
+        Size = UDim2.new(0, 25, 1, 0),
+        Position = UDim2.new(1, -25, 0, 0),
+        Text = "X",
+        TextColor3 = HM_UI.Style.TextColor,
+        BackgroundColor3 = Color3.fromRGB(200, 50, 50),
+        Parent = TitleBar
+    })
+    
+    CloseButton.MouseButton1Click:Connect(function()
+        Window:Destroy()
+    end)
+    
+    -- 大小调整句柄 (右下角)
+    local ResizeHandle = HM_UI:CreateElement("Frame", {
+        Name = "ResizeHandle",
+        Size = UDim2.new(0, 10, 0, 10),
+        Position = UDim2.new(1, -10, 1, -10),
+        BackgroundColor3 = HM_UI.Style.AccentColor,
+        BackgroundTransparency = 0.5,
+        BorderSizePixel = 0,
+        Parent = Window
+    })
+    
+    ResizeHandle.InputBegan:Connect(function(input, gameProcessedEvent)
+        if gameProcessedEvent or self.State == WindowState.Locked or self.State == WindowState.Minimized then return end
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            activeResizeWindow = self
+            self.DragStartPos = UserInputService:GetMouseLocation() or input.Position
+            self.DragStartSize = Vector2.new(Window.AbsoluteSize.X, Window.AbsoluteSize.Y)
+        end
+    end)
+
+    return Window
+end
+
+-- ====================================================================
+-- 2. 标准 UI 组件
+-- ====================================================================
+
+-- 按钮 (Button)
+function HM_UI.Components.Button(text: string, parent: GuiBase)
+    local Button = HM_UI:CreateElement("TextButton", {
+        Size = UDim2.new(1, 0, 0, 30),
+        Text = text,
+        Font = HM_UI.Style.Font,
+        TextColor3 = HM_UI.Style.TextColor,
+        BackgroundColor3 = HM_UI.Style.ButtonColor,
+        Parent = parent
+    })
+    return Button
+end
+
+-- 开关 (Toggle)
+function HM_UI.Components.Toggle(label: string, parent: GuiBase, initialValue: boolean)
+    local ToggleFrame = HM_UI:CreateElement("Frame", {
+        Size = UDim2.new(1, 0, 0, 30),
+        BackgroundColor3 = HM_UI.Style.WindowColor,
+        BorderSizePixel = 0,
+        Parent = parent
+    })
+    
+    HM_UI:CreateElement("TextLabel", {
+        Size = UDim2.new(1, -40, 1, 0),
+        Text = label,
+        TextColor3 = HM_UI.Style.TextColor,
+        BackgroundColor3 = HM_UI.Style.WindowColor,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Padding = UDim.new(0, 5),
+        Parent = ToggleFrame
+    })
+    
+    local ToggleButton = HM_UI:CreateElement("TextButton", {
+        Size = UDim2.new(0, 40, 1, 0),
+        Position = UDim2.new(1, -40, 0, 0),
+        Text = initialValue and "ON" or "OFF",
+        TextColor3 = HM_UI.Style.TextColor,
+        BackgroundColor3 = initialValue and HM_UI.Style.AccentColor or HM_UI.Style.ButtonColor,
+        Parent = ToggleFrame
+    })
+    
+    local value = initialValue
+    function ToggleFrame:GetValue() return value end
+    
+    local function updateToggle(newValue)
+        value = newValue
+        ToggleButton.Text = value and "ON" or "OFF"
+        ToggleButton.BackgroundColor3 = value and HM_UI.Style.AccentColor or HM_UI.Style.ButtonColor
+        ToggleFrame.Changed:Fire(value)
+    end
+    
+    ToggleButton.MouseButton1Click:Connect(function()
+        updateToggle(not value)
+    end)
+
+    ToggleFrame.Changed = Instance.new("BindableEvent")
+    return ToggleFrame
+end
+
+-- 滑块 (Slider)
+function HM_UI.Components.Slider(label: string, parent: GuiBase, min: number, max: number, initialValue: number)
+    local SliderFrame = HM_UI:CreateElement("Frame", {
+        Size = UDim2.new(1, 0, 0, 45),
+        BackgroundColor3 = HM_UI.Style.WindowColor,
+        BorderSizePixel = 0,
+        Parent = parent
+    })
+    
+    local ValueLabel = HM_UI:CreateElement("TextLabel", {
+        Size = UDim2.new(1, 0, 0, 15),
+        Text = string.format("%s: %.1f", label, initialValue),
+        TextColor3 = HM_UI.Style.TextColor,
+        BackgroundColor3 = HM_UI.Style.WindowColor,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Padding = UDim.new(0, 5),
+        Parent = SliderFrame
+    })
+
+    local Track = HM_UI:CreateElement("Frame", {
+        Size = UDim2.new(1, 0, 0, 10),
+        Position = UDim2.new(0, 0, 0, 20),
+        BackgroundColor3 = HM_UI.Style.ButtonColor,
+        Parent = SliderFrame
+    })
+
+    local Fill = HM_UI:CreateElement("Frame", {
+        Size = UDim2.new(0, 0, 1, 0),
+        BackgroundColor3 = HM_UI.Style.AccentColor,
+        Parent = Track
+    })
+
+    local Knob = HM_UI:CreateElement("Frame", {
+        Size = UDim2.new(0, 10, 0, 20),
+        Position = UDim2.new(0, 0, 0.5, -10),
+        BackgroundColor3 = HM_UI.Style.TextColor,
+        ZIndex = 2,
+        Parent = Track
+    })
+
+    local value = initialValue
+    function SliderFrame:GetValue() return value end
+    SliderFrame.Changed = Instance.new("BindableEvent")
+    
+    local function updateKnob(xPos: number)
+        local trackWidth = Track.AbsoluteSize.X
+        local clampedX = math.min(trackWidth - 5, math.max(5, xPos))
+        
+        local percentage = (clampedX - 5) / (trackWidth - 10)
+        local newValue = min + percentage * (max - min)
+        
+        value = math.round(newValue * 10) / 10
+        
+        local knobXScale = (clampedX - 5) / trackWidth
+        
+        Knob.Position = UDim2.new(knobXScale, 0, 0.5, -10)
+        Fill.Size = UDim2.new(knobXScale, 0, 1, 0)
+        ValueLabel.Text = string.format("%s: %.1f", label, value)
+        
+        SliderFrame.Changed:Fire(value)
+    end
+    
+    local drag = false
+    Knob.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then drag = true end
+    end)
+    Knob.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then drag = false end
+    end)
+    
+    UserInputService.InputChanged:Connect(function(input)
+        if drag and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local mousePos = UserInputService:GetMouseLocation()
+            local trackAbsX = Track.AbsolutePosition.X
+            updateKnob(mousePos.X - trackAbsX)
+        end
+    end)
+    
+    -- 初始化位置
+    RunService.Heartbeat:Wait() 
+    local initialPercent = (initialValue - min) / (max - min)
+    local initialKnobPos = Track.AbsoluteSize.X * initialPercent + 5
+    updateKnob(initialKnobPos) 
+    
+    return SliderFrame
+end
+
+-- 输入框 (TextBox)
+function HM_UI.Components.TextBox(label: string, parent: GuiBase, placeholder: string)
+    local TextBoxFrame = HM_UI:CreateElement("Frame", {
+        Size = UDim2.new(1, 0, 0, 45),
+        BackgroundColor3 = HM_UI.Style.WindowColor,
+        BorderSizePixel = 0,
+        Parent = parent
+    })
+    
+    HM_UI:CreateElement("TextLabel", {
+        Size = UDim2.new(1, 0, 0, 15),
+        Text = label,
+        TextColor3 = HM_UI.Style.TextColor,
+        BackgroundColor3 = HM_UI.Style.WindowColor,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Padding = UDim.new(0, 5),
+        Parent = TextBoxFrame
+    })
+    
+    local TextBox = HM_UI:CreateElement("TextBox", {
+        Size = UDim2.new(1, 0, 0, 30),
+        Position = UDim2.new(0, 0, 0, 15),
+        PlaceholderText = placeholder,
+        Text = "",
+        Font = HM_UI.Style.Font,
+        TextColor3 = HM_UI.Style.TextColor,
+        BackgroundColor3 = HM_UI.Style.ButtonColor,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Padding = UDim.new(0, 5),
+        ClearTextOnFocus = false,
+        Parent = TextBoxFrame
+    })
+    
+    function TextBoxFrame:GetValue() return TextBox.Text end
+    TextBoxFrame.TextBox = TextBox
+    
+    return TextBoxFrame
+end
+
+-- 选项卡 (TabContainer)
+function HM_UI.Components.TabContainer(parent: GuiBase)
+    local TabContainer = HM_UI:CreateElement("Frame", {
+        Name = "TabContainer",
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundColor3 = HM_UI.Style.WindowColor,
+        Parent = parent
+    })
+
+    local TabBar = HM_UI:CreateElement("Frame", {
+        Name = "TabBar",
+        Size = UDim2.new(1, 0, 0, 25),
+        BackgroundColor3 = HM_UI.Style.BorderColor,
+        Parent = TabContainer
+    })
+    
+    local TabView = HM_UI:CreateElement("Frame", {
+        Name = "TabView",
+        Size = UDim2.new(1, 0, 1, -25),
+        Position = UDim2.new(0, 0, 0, 25),
+        BackgroundColor3 = HM_UI.Style.WindowColor,
+        Parent = TabContainer
+    })
+    
+    local tabs = {}
+    local currentTab = nil
+    
+    local function selectTab(tabName: string)
+        for name, data in tabs do
+            data.Button.BackgroundColor3 = (name == tabName) and HM_UI.Style.AccentColor or HM_UI.Style.ButtonColor
+            data.Content.Visible = (name == tabName)
+        end
+        currentTab = tabName
+    end
+
+    function TabContainer:AddTab(tabName: string)
+        local TabButton = HM_UI:CreateElement("TextButton", {
+            Text = tabName,
+            TextColor3 = HM_UI.Style.TextColor,
+            BackgroundColor3 = HM_UI.Style.ButtonColor,
+            Parent = TabBar
+        })
+        
+        local TabContent = HM_UI:CreateElement("ScrollingFrame", {
+            Name = tabName .. "Content",
+            Size = UDim2.new(1, 0, 1, 0),
+            BackgroundColor3 = HM_UI.Style.WindowColor,
+            AutomaticCanvasSize = Enum.AutomaticSize.Y,
+            Visible = false,
+            BorderSizePixel = 0,
+            Parent = TabView
+        })
+        
+        TabButton.MouseButton1Click:Connect(function()
+            selectTab(tabName)
+        end)
+
+        tabs[tabName] = {Button = TabButton, Content = TabContent}
+
+        -- 调整所有按钮位置和大小
+        local buttonCount = #tabs
+        local xOffset = 0
+        for name, data in tabs do
+            data.Button.Size = UDim2.new(1/buttonCount, 0, 1, 0)
+            data.Button.Position = UDim2.new(xOffset, 0, 0, 0)
+            xOffset = xOffset + 1/buttonCount
+        end
+        
+        if #tabs == 1 then
+            selectTab(tabName)
+        end
+        
+        return TabContent
+    end
+
+    return TabContainer
+end
+
+
+return HM_UI
