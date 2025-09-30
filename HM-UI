@@ -118,9 +118,11 @@ function SynthUI.Button(props, parent)
     end)
     
     button.MouseButton1Click:Connect(function()
-        tween(button, {BackgroundColor3 = Color3.fromRGB(70, 140, 220)}, 0.1):Play()
-        wait(0.1)
-        tween(button, {BackgroundColor3 = Color3.fromRGB(85, 170, 255)}, 0.1):Play()
+        spawn(function()
+            tween(button, {BackgroundColor3 = Color3.fromRGB(70, 140, 220)}, 0.1):Play()
+            wait(0.1)
+            tween(button, {BackgroundColor3 = Color3.fromRGB(85, 170, 255)}, 0.1):Play()
+        end)
         if props.Callback then props.Callback() end
     end)
     
@@ -410,10 +412,12 @@ function SynthUI.NotificationManager:Dismiss(notif)
     for i, n in ipairs(self.Notifications) do
         if n == notif then
             table.remove(self.Notifications, i)
-            tween(notif, {Position = UDim2.new(1, 0, 0, notif.Position.Y.Offset), Size = UDim2.new(0, 0, 0, 0)}, 0.3, Enum.EasingStyle.Quad)
-            tween(notif, {BackgroundTransparency = 1}, 0.3):Play()
-            wait(0.3)
-            notif:Destroy()
+            spawn(function()
+                tween(notif, {Position = UDim2.new(1, 0, 0, notif.Position.Y.Offset), Size = UDim2.new(0, 0, 0, 0)}, 0.3, Enum.EasingStyle.Quad)
+                tween(notif, {BackgroundTransparency = 1}, 0.3):Play()
+                wait(0.3)
+                notif:Destroy()
+            end)
             
             self.NextY = 10
             for _, remaining in ipairs(self.Notifications) do
@@ -426,11 +430,12 @@ function SynthUI.NotificationManager:Dismiss(notif)
 end
 
 function SynthUI.Modal(props, parent)
-    local overlay = SynthUI.Frame({Size = UDim2.new(1, 0, 1, 0), BackgroundColor3 = Color3.fromRGB(0, 0, 0), BackgroundTransparency = 0.5}, parent)
-    local dialog = SynthUI.Frame({Size = UDim2.new(0, 300, 0, 200), Position = UDim2.new(0.5, -150, 0.5, -100), BackgroundColor3 = Color3.fromRGB(255, 255, 255)}, overlay)
+    local overlay = SynthUI.Frame({Size = UDim2.new(1, 0, 1, 0), BackgroundColor3 = Color3.fromRGB(0, 0, 0), BackgroundTransparency = 1}, parent)
+    local dialog = SynthUI.Frame({Size = UDim2.new(0, 300, 0, 200), Position = UDim2.new(0.5, -150, 0.5, -100), BackgroundTransparency = 1}, overlay)
     
     local titleBar = SynthUI.Frame({Size = UDim2.new(1, 0, 0, 30), BackgroundColor3 = Color3.fromRGB(240, 240, 240)}, dialog)
-    local title = SynthUI.Label({Text = props.Title or "Modal", Size = UDim2.new(1, -90, 1, 0), Position = UDim2.new(0, 10, 0, 0), BackgroundTransparency = 1, TextSize = 14}, titleBar)
+    local title = SynthUI.Label({Text = props.Title or "Modal", Size = UDim2.new(0.6, 0, 0.5, 0), Position = UDim2.new(0, 10, 0, 0), BackgroundTransparency = 1, TextSize = 14, TextColor3 = Color3.fromRGB(0, 0, 0)}, titleBar)
+    local subtitle = SynthUI.Label({Text = props.Subtitle or "", Size = UDim2.new(0.6, 0, 0.5, 0), Position = UDim2.new(0, 10, 0.5, 0), BackgroundTransparency = 1, TextSize = 12, TextColor3 = Color3.fromRGB(100, 100, 100), Font = "Gotham"}, titleBar)
     
     SynthUI.MakeDraggable(dialog, titleBar)
     
@@ -446,9 +451,11 @@ function SynthUI.Modal(props, parent)
     closeBtn.MouseButton1Click:Connect(function()
         tween(overlay, {BackgroundTransparency = 1}, 0.2):Play()
         tween(dialog, {Size = UDim2.new(0, 0, 0, 0)}, 0.2):Play()
-        wait(0.2)
-        overlay:Destroy()
-        if props.OnClose then props.OnClose() end
+        spawn(function()
+            wait(0.2)
+            overlay:Destroy()
+            if props.OnClose then props.OnClose() end
+        end)
     end)
     
     minBtn.MouseButton1Click:Connect(function()
@@ -472,7 +479,7 @@ function SynthUI.Modal(props, parent)
     
     overlay.BackgroundTransparency = 1
     dialog.Size = UDim2.new(0, 0, 0, 0)
-    tween(overlay, {BackgroundTransparency = 0.5}, 0.3):Play()
+    tween(overlay, {BackgroundTransparency = 1}, 0.3):Play()
     tween(dialog, {Size = originalSize}, 0.3):Play()
     
     if props.Content then
