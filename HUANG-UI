@@ -66,6 +66,7 @@ local ScreenGui = nil
 
 local DefaultTweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
 local FadeTweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.InOut)
+local QuickTweenInfo = TweenInfo.new(0.1, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
 
 function HuangUI:CreateWindow(options)
     local window = {}
@@ -187,10 +188,10 @@ function HuangUI:CreateWindow(options)
 
     local function addHover(button, hoverColor)
         button.MouseEnter:Connect(function()
-            TweenService:Create(button, TweenInfo.new(0.1), {BackgroundColor3 = hoverColor}):Play()
+            TweenService:Create(button, QuickTweenInfo, {BackgroundColor3 = hoverColor}):Play()
         end)
         button.MouseLeave:Connect(function()
-            TweenService:Create(button, TweenInfo.new(0.1), {BackgroundColor3 = button.BackgroundColor3}):Play()
+            TweenService:Create(button, QuickTweenInfo, {BackgroundColor3 = button.BackgroundColor3}):Play()
         end)
     end
 
@@ -237,12 +238,12 @@ function HuangUI:CreateWindow(options)
 
         TabButton.MouseButton1Click:Connect(function()
             for _, t in pairs(tabs) do
-                TweenService:Create(t.Button, TweenInfo.new(0.2), {BackgroundTransparency = 1}):Play()
+                TweenService:Create(t.Button, TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {BackgroundTransparency = 1}):Play()
                 TweenService:Create(t.Content, FadeTweenInfo, {BackgroundTransparency = 1}):Play()
                 t.Content.Visible = false
             end
             TabContentFrame.Visible = true
-            TweenService:Create(TabButton, TweenInfo.new(0.2), {BackgroundTransparency = 0}):Play()
+            TweenService:Create(TabButton, TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {BackgroundTransparency = 0}):Play()
             TweenService:Create(TabContentFrame, DefaultTweenInfo, {BackgroundTransparency = 0}):Play()
             currentTab = TabContentFrame
         end)
@@ -317,7 +318,7 @@ function HuangUI:CreateWindow(options)
                 Button.MouseButton1Click:Connect(function()
                     TweenService:Create(Button, TweenInfo.new(0.1, Enum.EasingStyle.Back, Enum.EasingDirection.InOut), {Size = UDim2.new(1, -20, 0, 28)}):Play()
                     task.wait(0.1)
-                    TweenService:Create(Button, TweenInfo.new(0.1), {Size = UDim2.new(1, -20, 0, 30)}):Play()
+                    TweenService:Create(Button, TweenInfo.new(0.1, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = UDim2.new(1, -20, 0, 30)}):Play()
                     callback()
                 end)
 
@@ -373,15 +374,19 @@ function HuangUI:CreateWindow(options)
                 local state = default
                 ToggleButton.MouseButton1Click:Connect(function()
                     state = not state
-                    TweenService:Create(ToggleButton, TweenInfo.new(0.2), {BackgroundColor3 = state and CurrentTheme.Accent or Color3.fromRGB(100, 100, 100), Size = UDim2.new(0, 18, 0, 18)}):Play()
+                    TweenService:Create(ToggleButton, TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {BackgroundColor3 = state and CurrentTheme.Accent or Color3.fromRGB(100, 100, 100), Size = UDim2.new(0, 18, 0, 18)}):Play()
                     task.wait(0.1)
-                    TweenService:Create(ToggleButton, TweenInfo.new(0.1), {Size = UDim2.new(0, 20, 0, 20)}):Play()
+                    TweenService:Create(ToggleButton, QuickTweenInfo, {Size = UDim2.new(0, 20, 0, 20)}):Play()
                     callback(state)
                 end)
 
                 elementY = elementY + 40
 
-                return {Toggle = ToggleButton, Set = function(value) state = value; ToggleButton.BackgroundColor3 = value and CurrentTheme.Accent or Color3.fromRGB(100, 100, 100); callback(value) end}
+                return {Toggle = ToggleButton, Set = function(value) 
+                    state = value
+                    ToggleButton.BackgroundColor3 = value and CurrentTheme.Accent or Color3.fromRGB(100, 100, 100)
+                    callback(value) 
+                end}
             end
 
             function section:AddSlider(options)
@@ -451,7 +456,7 @@ function HuangUI:CreateWindow(options)
                         local mouse = UserInputService:GetMouseLocation()
                         local relativeX = math.clamp((mouse.X - SliderBar.AbsolutePosition.X) / SliderBar.AbsoluteSize.X, 0, 1)
                         value = math.floor(min + relativeX * (max - min))
-                        TweenService:Create(SliderFill, TweenInfo.new(0.1), {Size = UDim2.new(relativeX, 0, 1, 0)}):Play()
+                        TweenService:Create(SliderFill, QuickTweenInfo, {Size = UDim2.new(relativeX, 0, 1, 0)}):Play()
                         SliderLabel.Text = sliderText .. ": " .. value
                         callback(value)
                     end
@@ -465,7 +470,13 @@ function HuangUI:CreateWindow(options)
 
                 elementY = elementY + 60
 
-                return {Slider = SliderBar, Set = function(val) value = val; local rel = (val - min) / (max - min); TweenService:Create(SliderFill, DefaultTweenInfo, {Size = UDim2.new(rel, 0, 1, 0)}):Play(); SliderLabel.Text = sliderText .. ": " .. val; callback(val) end}
+                return {Slider = SliderBar, Set = function(val) 
+                    value = val
+                    local rel = (val - min) / (max - min)
+                    TweenService:Create(SliderFill, DefaultTweenInfo, {Size = UDim2.new(rel, 0, 1, 0)}):Play()
+                    SliderLabel.Text = sliderText .. ": " .. val
+                    callback(val) 
+                end}
             end
 
             function section:AddDropdown(options)
@@ -615,7 +626,7 @@ function HuangUI:CreateWindow(options)
                 addHover(ColorButton, Color3.fromRGB(255, 255, 255))
 
                 ColorButton.MouseButton1Click:Connect(function()
-                    TweenService:Create(ColorButton, TweenInfo.new(0.1), {Size = UDim2.new(0, 18, 1, 0)}):Play()
+                    TweenService:Create(ColorButton, QuickTweenInfo, {Size = UDim2.new(0, 18, 1, 0)}):Play()
                     task.wait(0.1)
                     default = Color3.fromRGB(math.random(0,255), math.random(0,255), math.random(0,255))
                     TweenService:Create(ColorButton, DefaultTweenInfo, {BackgroundColor3 = default, Size = UDim2.new(0, 20, 1, 0)}):Play()
@@ -624,7 +635,11 @@ function HuangUI:CreateWindow(options)
 
                 elementY = elementY + 40
 
-                return {Button = ColorButton, Set = function(color) default = color; TweenService:Create(ColorButton, DefaultTweenInfo, {BackgroundColor3 = color}):Play(); callback(color) end}
+                return {Button = ColorButton, Set = function(color) 
+                    default = color
+                    TweenService:Create(ColorButton, DefaultTweenInfo, {BackgroundColor3 = color}):Play()
+                    callback(color) 
+                end}
             end
 
             function section:AddKeybind(options)
@@ -675,7 +690,7 @@ function HuangUI:CreateWindow(options)
                 local binding = false
                 KeyButton.MouseButton1Click:Connect(function()
                     binding = true
-                    TweenService:Create(KeyButton, TweenInfo.new(0.5, Enum.EasingStyle.Bounce), {Size = UDim2.new(0, 25, 1, 0)}):Play()
+                    TweenService:Create(KeyButton, TweenInfo.new(0.5, Enum.EasingStyle.Bounce, Enum.EasingDirection.Out), {Size = UDim2.new(0, 25, 1, 0)}):Play()
                     task.wait(0.2)
                     TweenService:Create(KeyButton, DefaultTweenInfo, {Size = UDim2.new(0, 20, 1, 0)}):Play()
                     KeyButton.Text = "..."
@@ -692,7 +707,11 @@ function HuangUI:CreateWindow(options)
 
                 elementY = elementY + 40
 
-                return {Button = KeyButton, Set = function(key) default = key; KeyButton.Text = key.Name; callback(key) end}
+                return {Button = KeyButton, Set = function(key) 
+                    default = key
+                    KeyButton.Text = key.Name
+                    callback(key) 
+                end}
             end
 
             function section:AddParagraph(options)
