@@ -1,0 +1,501 @@
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+
+local SynthUI = {}
+SynthUI.__index = SynthUI
+
+local function createInstance(className, parent, props)
+    local instance = Instance.new(className)
+    instance.Parent = parent or nil
+    
+    if props then
+        for key, value in pairs(props) do
+            if key == "Size" or key == "Position" then
+                instance[key] = UDim2.new(value.X.Scale or 0, value.X.Offset or 0, value.Y.Scale or 0, value.Y.Offset or 0)
+            elseif key == "AnchorPoint" then
+                instance[key] = Vector2.new(value.X or 0, value.Y or 0)
+            elseif key == "BackgroundColor3" then
+                instance[key] = Color3.fromRGB(value.R or 255, value.G or 255, value.B or 255)
+            elseif key == "TextColor3" then
+                instance[key] = Color3.fromRGB(value.R or 255, value.G or 255, value.B or 255)
+            elseif key == "Font" then
+                instance[key] = Enum.Font[value]
+            elseif key == "TextSize" then
+                instance[key] = value
+            elseif key == "Transparency" then
+                instance[key] = value
+            else
+                instance[key] = value
+            end
+        end
+    end
+    
+    if className == "Frame" or className == "TextButton" or className == "ImageButton" or className == "TextBox" then
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, props.CornerRadius or 4)
+        corner.Parent = instance
+    end
+    
+    return instance
+end
+
+local function tween(instance, goal, duration, easingStyle)
+    local tweenInfo = TweenInfo.new(duration or 0.2, easingStyle or Enum.EasingStyle.Quad, Enum.EasingDirection.InOut)
+    local tween = TweenService:Create(instance, tweenInfo, goal)
+    tween:Play()
+    return tween
+end
+
+function SynthUI.MakeDraggable(frame, dragHandle)
+    dragHandle = dragHandle or frame
+    local dragging = false
+    local dragStart = nil
+    local startPos = nil
+    
+    local function updateInput(input)
+        local delta = input.Position - dragStart
+        local newPos = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        local screenSize = workspace.CurrentCamera.ViewportSize
+        local frameSize = frame.AbsoluteSize
+        newPos = UDim2.new(math.clamp(newPos.X.Scale, 0, 1 - frameSize.X / screenSize.X), newPos.X.Offset, 
+                           math.clamp(newPos.Y.Scale, 0, 1 - frameSize.Y / screenSize.Y), newPos.Y.Offset)
+        tween(frame, {Position = newPos}, 0.1)
+    end
+    
+    dragHandle.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            startPos = frame.Position
+            tween(frame, {Size = frame.Size * 0.98}, 0.1)
+        end
+    end)
+    
+    dragHandle.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+            tween(frame, {Size = frame.Size / 0.98}, 0.1)
+        end
+    end)
+    
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            updateInput(input)
+        end
+    end)
+end
+
+function SynthUI.createScreenGui(parent, props)
+    return createInstance("ScreenGui", parent, props)
+end
+
+function SynthUI.Frame(props, parent)
+    local frame = createInstance("Frame", parent, props)
+    frame.BorderSizePixel = props.BorderSizePixel or 0
+    return frame
+end
+
+function SynthUI.Label(props, parent)
+    local label = createInstance("TextLabel", parent, props)
+    label.Text = props.Text or ""
+    label.TextScaled = props.TextScaled or true
+    label.BackgroundTransparency = props.BackgroundTransparency or 1
+    return label
+end
+
+function SynthUI.Button(props, parent)
+    local button = createInstance("TextButton", parent, props)
+    button.Text = props.Text or "Button"
+    button.TextScaled = true
+    button.BackgroundColor3 = Color3.fromRGB(85, 170, 255)
+    
+    button.MouseEnter:Connect(function()
+        tween(button, {Size = button.Size * 1.05}, 0.2)
+    end)
+    button.MouseLeave:Connect(function()
+        tween(button, {Size = button.Size / 1.05}, 0.2)
+    end)
+    
+    button.MouseButton1Click:Connect(function()
+        tween(button, {BackgroundColor3 = Color3.fromRGB(70, 140, 220)}, 0.1):Play()
+        wait(0.1)
+        tween(button, {BackgroundColor3 = Color3.fromRGB(85, 170, 255)}, 0.1):Play()
+        if props.Callback then props.Callback() end
+    end)
+    
+    return button
+end
+
+function SynthUI.TextBox(props, parent)
+    local textbox = createInstance("TextBox", parent, props)
+    textbox.Text = props.Text or ""
+    textbox.TextScaled = props.TextScaled or true
+    textbox.PlaceholderText = props.PlaceholderText or "Enter text..."
+    
+    textbox.Focused:Connect(function()
+        tween(textbox, {BackgroundColor3 = Color3.fromRGB(240, 240, 240)}, 0.2)
+    end)
+    textbox.FocusLost:Connect(function()
+        tween(textbox, {BackgroundColor3 = Color3.fromRGB(255, 255, 255)}, 0.2)
+        if props.FocusLost then props.FocusLost() end
+    end)
+    
+    return textbox
+end
+
+function SynthUI.ImageLabel(props, parent)
+    local image = createInstance("ImageLabel", parent, props)
+    image.Image = props.Image or ""
+    image.ScaleType = Enum.ScaleType.Fit
+    if props.Rounded then
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, 4)
+        corner.Parent = image
+    end
+    return image
+end
+
+function SynthUI.ImageButton(props, parent)
+    local button = createInstance("ImageButton", parent, props)
+    button.Image = props.Image or ""
+    button.ScaleType = Enum.ScaleType.Fit
+    
+    button.MouseEnter:Connect(function()
+        tween(button, {Size = button.Size * 1.05}, 0.2)
+    end)
+    button.MouseLeave:Connect(function()
+        tween(button, {Size = button.Size / 1.05}, 0.2)
+    end)
+    
+    button.MouseButton1Click:Connect(function()
+        if props.Callback then props.Callback() end
+    end)
+    
+    return button
+end
+
+function SynthUI.ScrollingFrame(props, parent)
+    local scroll = createInstance("ScrollingFrame", parent, props)
+    scroll.ScrollBarThickness = props.ScrollBarThickness or 10
+    scroll.CanvasSize = props.CanvasSize or UDim2.new(0, 0, 0, 0)
+    return scroll
+end
+
+function SynthUI.Slider(props, parent)
+    local container = SynthUI.Frame({Size = props.Size or UDim2.new(1, 0, 0, 20), BackgroundColor3 = Color3.fromRGB(200, 200, 200)}, parent)
+    local bar = SynthUI.Frame({Size = UDim2.new(0.5, 0, 1, 0), BackgroundColor3 = Color3.fromRGB(85, 170, 255), AnchorPoint = Vector2.new(0, 0.5)}, container)
+    bar.Position = UDim2.new(0, 0, 0.5, 0)
+    
+    local dragging = false
+    local function updateValue()
+        local value = bar.AbsolutePosition.X / (container.AbsoluteSize.X - bar.AbsoluteSize.X)
+        props.ValueChanged(value * (props.Max or 1 - props.Min or 0) + (props.Min or 0))
+    end
+    
+    bar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            tween(bar, {Size = bar.Size * 1.1}, 0.1)
+        end
+    end)
+    bar.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+            tween(bar, {Size = bar.Size / 1.1}, 0.1)
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local mouse = Players.LocalPlayer:GetMouse()
+            local relX = math.clamp((mouse.X - container.AbsolutePosition.X) / container.AbsoluteSize.X, 0, 1)
+            tween(bar, {Position = UDim2.new(relX, -bar.AbsoluteSize.X / 2, 0.5, 0)}, 0.1)
+            updateValue()
+        end
+    end)
+    
+    return container
+end
+
+function SynthUI.Checkbox(props, parent)
+    local container = SynthUI.Frame({Size = UDim2.new(0, 20, 0, 20), BackgroundColor3 = Color3.fromRGB(255, 255, 255)}, parent)
+    local check = SynthUI.Frame({Size = UDim2.new(0, 16, 0, 16), BackgroundColor3 = Color3.fromRGB(85, 170, 255), Visible = props.Checked or false}, container)
+    local label = SynthUI.Label({Text = props.Text or "", Size = UDim2.new(1, -20, 1, 0), Position = UDim2.new(0, 25, 0, 0), BackgroundTransparency = 1}, container)
+    
+    container.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            check.Visible = not check.Visible
+            tween(container, {BackgroundColor3 = check.Visible and Color3.fromRGB(240, 250, 255) or Color3.fromRGB(255, 255, 255)}, 0.2)
+            if props.Callback then props.Callback(check.Visible) end
+        end
+    end)
+    
+    return container
+end
+
+function SynthUI.Dropdown(props, parent)
+    local container = SynthUI.Frame({Size = props.Size or UDim2.new(0, 100, 0, 30), BackgroundColor3 = Color3.fromRGB(255, 255, 255)}, parent)
+    local button = SynthUI.Button({Text = props.Items[1] or "Select", Size = UDim2.new(1, 0, 1, 0), Parent = container}, container)
+    local menu = SynthUI.ScrollingFrame({Size = UDim2.new(1, 0, 0, 0), Position = UDim2.new(0, 0, 1, 0), CanvasSize = UDim2.new(0, 0, 0, #props.Items * 30), BackgroundColor3 = Color3.fromRGB(240, 240, 240), Visible = false}, container)
+    
+    for i, item in ipairs(props.Items) do
+        local itemBtn = SynthUI.Button({Text = item, Size = UDim2.new(1, 0, 0, 30), Parent = menu}, menu)
+        itemBtn.Position = UDim2.new(0, 0, 0, (i-1)*30)
+        itemBtn.MouseButton1Click:Connect(function()
+            button.Text = item
+            menu.Visible = false
+            if props.Callback then props.Callback(item) end
+        end)
+    end
+    
+    button.MouseButton1Click:Connect(function()
+        menu.Visible = not menu.Visible
+        if menu.Visible then
+            tween(menu, {Position = UDim2.new(0, 0, 1, 0), Size = UDim2.new(1, 0, 0, #props.Items * 30)}, 0.2)
+        else
+            tween(menu, {Size = UDim2.new(1, 0, 0, 0)}, 0.2)
+        end
+    end)
+    
+    return container
+end
+
+function SynthUI.ProgressBar(props, parent)
+    local container = SynthUI.Frame({Size = props.Size or UDim2.new(1, 0, 0, 20), BackgroundColor3 = Color3.fromRGB(200, 200, 200)}, parent)
+    local bar = SynthUI.Frame({Size = UDim2.new(props.Value or 0, 0, 1, 0), BackgroundColor3 = Color3.fromRGB(85, 170, 255)}, container)
+    
+    local function update()
+        tween(bar, {Size = UDim2.new(math.clamp(props.Value or 0, 0, 1), 0, 1, 0)}, 0.3)
+    end
+    update()
+    
+    if props.OnUpdate then
+        props.OnUpdate:Connect(update)
+    end
+    
+    return container
+end
+
+function SynthUI.ToggleSwitch(props, parent)
+    local container = SynthUI.Frame({Size = UDim2.new(0, 50, 0, 25), BackgroundColor3 = Color3.fromRGB(200, 200, 200)}, parent)
+    local knob = SynthUI.Frame({Size = UDim2.new(0, 20, 0, 20), Position = UDim2.new(0, 2, 0.5, -10), BackgroundColor3 = Color3.fromRGB(255, 255, 255), AnchorPoint = Vector2.new(0, 0.5)}, container)
+    
+    local isOn = props.Default or false
+    local function updateState()
+        if isOn then
+            tween(container, {BackgroundColor3 = Color3.fromRGB(85, 170, 255)}, 0.2)
+            tween(knob, {Position = UDim2.new(1, -22, 0.5, -10)}, 0.2)
+        else
+            tween(container, {BackgroundColor3 = Color3.fromRGB(200, 200, 200)}, 0.2)
+            tween(knob, {Position = UDim2.new(0, 2, 0.5, -10)}, 0.2)
+        end
+        if props.Callback then props.Callback(isOn) end
+    end
+    
+    container.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            isOn = not isOn
+            updateState()
+        end
+    end)
+    updateState()
+    
+    return container
+end
+
+function SynthUI.TabFrame(props, parent)
+    local container = SynthUI.Frame({Size = props.Size or UDim2.new(1, 0, 1, 0)}, parent)
+    local tabs = SynthUI.Frame({Size = UDim2.new(1, 0, 0, 30), BackgroundColor3 = Color3.fromRGB(240, 240, 240)}, container)
+    local content = SynthUI.Frame({Size = UDim2.new(1, 0, 1, -30), Position = UDim2.new(0, 0, 0, 30), BackgroundColor3 = Color3.fromRGB(255, 255, 255)}, container)
+    
+    local activeTab = 1
+    for i, tabName in ipairs(props.Tabs) do
+        local tabBtn = SynthUI.Button({Text = tabName, Size = UDim2.new(0, 100 / #props.Tabs, 1, 0), Position = UDim2.new(0, (i-1) * (100 / #props.Tabs), 0, 0), Parent = tabs}, tabs)
+        tabBtn.BackgroundTransparency = (i == activeTab) and 0 or 0.5
+        tabBtn.MouseButton1Click:Connect(function()
+            activeTab = i
+            for j, btn in ipairs(tabs:GetChildren()) do
+                if btn:IsA("TextButton") then
+                    tween(btn, {BackgroundTransparency = (j == i) and 0 or 0.5}, 0.2)
+                end
+            end
+            if props.TabsContent and props.TabsContent[i] then
+                for _, child in ipairs(content:GetChildren()) do
+                    if child ~= props.TabsContent[i] then
+                        child.Visible = false
+                    end
+                end
+                props.TabsContent[i].Visible = true
+                props.TabsContent[i].Parent = content
+            end
+        end)
+    end
+    
+    return container
+end
+
+SynthUI.NotificationManager = {}
+SynthUI.NotificationManager.__index = SynthUI.NotificationManager
+
+local ICONS = {
+    success = "rbxasset://textures/ui/GuiImagePlaceholder.png",
+    error = "rbxasset://textures/ui/GuiImagePlaceholder.png",
+    warning = "rbxasset://textures/ui/GuiImagePlaceholder.png",
+    info = "rbxasset://textures/ui/GuiImagePlaceholder.png"
+}
+
+local COLORS = {
+    success = {Color3.fromRGB(76, 175, 80), Color3.fromRGB(100, 200, 100)},
+    error = {Color3.fromRGB(244, 67, 54), Color3.fromRGB(255, 100, 100)},
+    warning = {Color3.fromRGB(255, 193, 7), Color3.fromRGB(255, 220, 100)},
+    info = {Color3.fromRGB(33, 150, 243), Color3.fromRGB(100, 180, 255)}
+}
+
+function SynthUI.NotificationManager.new(parent)
+    local self = setmetatable({}, SynthUI.NotificationManager)
+    self.Parent = parent
+    self.Notifications = {}
+    self.NextY = 10
+    return self
+end
+
+function SynthUI.NotificationManager:Show(type, title, message, duration)
+    local notif = SynthUI.Frame({
+        Size = UDim2.new(0, 300, 0, 80),
+        Position = UDim2.new(1, -310, 0, self.NextY),
+        BackgroundTransparency = 1,
+        CornerRadius = 12
+    }, self.Parent)
+    
+    local gradient = Instance.new("UIGradient")
+    gradient.Color = ColorSequence.new{
+        ColorSequenceKeypoint.new(0, COLORS[type][1]),
+        ColorSequenceKeypoint.new(1, COLORS[type][2])
+    }
+    gradient.Rotation = 45
+    gradient.Parent = notif
+    
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(0, 0, 0)
+    stroke.Thickness = 2
+    stroke.Transparency = 0.5
+    stroke.Parent = notif
+    
+    local icon = SynthUI.ImageLabel({Size = UDim2.new(0, 40, 0, 40), Position = UDim2.new(0, 15, 0.5, -20), Image = ICONS[type] or "", Rounded = true}, notif)
+    
+    local titleLabel = SynthUI.Label({Text = title, Position = UDim2.new(0, 65, 0, 15), Size = UDim2.new(1, -100, 0, 20), TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 16, Font = "GothamBold", BackgroundTransparency = 1}, notif)
+    local msgLabel = SynthUI.Label({Text = message, Position = UDim2.new(0, 65, 0, 40), Size = UDim2.new(1, -100, 0, 30), TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 14, BackgroundTransparency = 1}, notif)
+    
+    local closeBtn = SynthUI.Button({Text = "×", Size = UDim2.new(0, 20, 0, 20), Position = UDim2.new(1, -25, 0, 10), TextSize = 14, BackgroundTransparency = 1, TextColor3 = Color3.fromRGB(255, 255, 255)}, notif)
+    closeBtn.MouseButton1Click:Connect(function()
+        self:Dismiss(notif)
+    end)
+    
+    notif.Size = UDim2.new(0, 0, 0, 0)
+    tween(notif, {Size = UDim2.new(0, 300, 0, 80), Position = UDim2.new(1, -310, 0, self.NextY)}, 0.4, Enum.EasingStyle.Back)
+    tween(notif, {BackgroundTransparency = 0.1}, 0.4)
+    
+    table.insert(self.Notifications, notif)
+    self.NextY = self.NextY + 90
+    
+    spawn(function()
+        wait(duration or 3)
+        self:Dismiss(notif)
+    end)
+    
+    return notif
+end
+
+function SynthUI.NotificationManager:Dismiss(notif)
+    for i, n in ipairs(self.Notifications) do
+        if n == notif then
+            table.remove(self.Notifications, i)
+            tween(notif, {Position = UDim2.new(1, 0, 0, notif.Position.Y.Offset), Size = UDim2.new(0, 0, 0, 0)}, 0.3, Enum.EasingStyle.Quad)
+            tween(notif, {BackgroundTransparency = 1}, 0.3):Play()
+            wait(0.3)
+            notif:Destroy()
+            
+            self.NextY = 10
+            for _, remaining in ipairs(self.Notifications) do
+                tween(remaining, {Position = UDim2.new(1, -310, 0, self.NextY)}, 0.2)
+                self.NextY = self.NextY + 90
+            end
+            break
+        end
+    end
+end
+
+function SynthUI.Modal(props, parent)
+    local overlay = SynthUI.Frame({Size = UDim2.new(1, 0, 1, 0), BackgroundColor3 = Color3.fromRGB(0, 0, 0), BackgroundTransparency = 0.5}, parent)
+    local dialog = SynthUI.Frame({Size = UDim2.new(0, 300, 0, 200), Position = UDim2.new(0.5, -150, 0.5, -100), BackgroundColor3 = Color3.fromRGB(255, 255, 255)}, overlay)
+    
+    local titleBar = SynthUI.Frame({Size = UDim2.new(1, 0, 0, 30), BackgroundColor3 = Color3.fromRGB(240, 240, 240)}, dialog)
+    local title = SynthUI.Label({Text = props.Title or "Modal", Size = UDim2.new(1, -90, 1, 0), Position = UDim2.new(0, 10, 0, 0), BackgroundTransparency = 1, TextSize = 14}, titleBar)
+    
+    SynthUI.MakeDraggable(dialog, titleBar)
+    
+    local minBtn = SynthUI.Button({Text = "_", Size = UDim2.new(0, 30, 1, 0), Position = UDim2.new(1, -90, 0, 0), TextSize = 16, BackgroundColor3 = Color3.fromRGB(200, 200, 200), Parent = titleBar}, titleBar)
+    local maxBtn = SynthUI.Button({Text = "□", Size = UDim2.new(0, 30, 1, 0), Position = UDim2.new(1, -60, 0, 0), TextSize = 16, BackgroundColor3 = Color3.fromRGB(200, 200, 200), Parent = titleBar}, titleBar)
+    local closeBtn = SynthUI.Button({Text = "×", Size = UDim2.new(0, 30, 1, 0), Position = UDim2.new(1, -30, 0, 0), TextSize = 16, BackgroundColor3 = Color3.fromRGB(255, 100, 100), TextColor3 = Color3.fromRGB(255, 255, 255), Parent = titleBar}, titleBar)
+    
+    local content = SynthUI.Frame({Size = UDim2.new(1, 0, 1, -30), Position = UDim2.new(0, 0, 0, 30), Parent = dialog}, dialog)
+    local isMaximized = false
+    local originalSize = dialog.Size
+    local originalPos = dialog.Position
+    
+    closeBtn.MouseButton1Click:Connect(function()
+        tween(overlay, {BackgroundTransparency = 1}, 0.2):Play()
+        tween(dialog, {Size = UDim2.new(0, 0, 0, 0)}, 0.2):Play()
+        wait(0.2)
+        overlay:Destroy()
+        if props.OnClose then props.OnClose() end
+    end)
+    
+    minBtn.MouseButton1Click:Connect(function()
+        content.Visible = not content.Visible
+        minBtn.Text = content.Visible and "_" or "□"
+        tween(dialog, {Size = content.Visible and originalSize or UDim2.new(0, 300, 0, 30)}, 0.2)
+    end)
+    
+    maxBtn.MouseButton1Click:Connect(function()
+        isMaximized = not isMaximized
+        if isMaximized then
+            originalSize = dialog.Size
+            originalPos = dialog.Position
+            tween(dialog, {Size = UDim2.new(1, 0, 1, 0), Position = UDim2.new(0, 0, 0, 0)}, 0.2):Play()
+            maxBtn.Text = "❐"
+        else
+            tween(dialog, {Size = originalSize, Position = originalPos}, 0.2):Play()
+            maxBtn.Text = "□"
+        end
+    end)
+    
+    overlay.BackgroundTransparency = 1
+    dialog.Size = UDim2.new(0, 0, 0, 0)
+    tween(overlay, {BackgroundTransparency = 0.5}, 0.3):Play()
+    tween(dialog, {Size = originalSize}, 0.3):Play()
+    
+    if props.Content then
+        props.Content.Parent = content
+    end
+    
+    return overlay
+end
+
+function SynthUI.GridLayout(props, parent)
+    local grid = Instance.new("UIGridLayout")
+    grid.Parent = parent
+    grid.CellSize = props.CellSize or UDim2.new(0, 100, 0, 100)
+    grid.CellPadding = props.CellPadding or UDim2.new(0, 5, 0, 5)
+    return grid
+end
+
+function SynthUI.ListLayout(props, parent)
+    local list = Instance.new("UIListLayout")
+    list.Parent = parent
+    list.FillDirection = props.FillDirection or Enum.FillDirection.Vertical
+    list.Padding = UDim.new(0, props.Padding or 5)
+    return list
+end
+
+return SynthUI
