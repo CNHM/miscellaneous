@@ -64,8 +64,8 @@ local Themes = {
 local CurrentTheme = Themes.Dark
 local ScreenGui = nil
 
-local TweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
-local FadeInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.InOut)
+local DefaultTweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+local FadeTweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.InOut)
 
 function HuangUI:CreateWindow(options)
     local window = {}
@@ -92,7 +92,7 @@ function HuangUI:CreateWindow(options)
     MainFrame.Draggable = true
 
     MainFrame.BackgroundTransparency = 1
-    TweenService:Create(MainFrame, TweenInfo, {BackgroundTransparency = 0}):Play()
+    TweenService:Create(MainFrame, DefaultTweenInfo, {BackgroundTransparency = 0}):Play()
 
     local TitleBar = Instance.new("Frame")
     TitleBar.Name = "TitleBar"
@@ -164,12 +164,12 @@ function HuangUI:CreateWindow(options)
 
     MinimizeButton.MouseButton1Click:Connect(function()
         if isMinimized then
-            TweenService:Create(MainFrame, TweenInfo, {Size = size}):Play()
+            TweenService:Create(MainFrame, DefaultTweenInfo, {Size = size}):Play()
             ContentFrame.Visible = true
             isMinimized = false
             MinimizeButton.Text = "-"
         else
-            TweenService:Create(MainFrame, TweenInfo, {Size = UDim2.new(0, 500, 0, 30)}):Play()
+            TweenService:Create(MainFrame, DefaultTweenInfo, {Size = UDim2.new(0, 500, 0, 30)}):Play()
             ContentFrame.Visible = false
             isMinimized = true
             MinimizeButton.Text = "+"
@@ -177,12 +177,12 @@ function HuangUI:CreateWindow(options)
     end)
 
     CloseButton.MouseButton1Click:Connect(function()
-        local fadeTween = TweenService:Create(MainFrame, FadeInfo, {BackgroundTransparency = 1})
+        local fadeTween = TweenService:Create(MainFrame, FadeTweenInfo, {BackgroundTransparency = 1})
         fadeTween:Play()
         fadeTween.Completed:Connect(function()
             ScreenGui:Destroy()
         end)
-        TweenService:Create(TitleBar, FadeInfo, {BackgroundTransparency = 1}):Play()
+        TweenService:Create(TitleBar, FadeTweenInfo, {BackgroundTransparency = 1}):Play()
     end)
 
     local function addHover(button, hoverColor)
@@ -238,12 +238,12 @@ function HuangUI:CreateWindow(options)
         TabButton.MouseButton1Click:Connect(function()
             for _, t in pairs(tabs) do
                 TweenService:Create(t.Button, TweenInfo.new(0.2), {BackgroundTransparency = 1}):Play()
-                TweenService:Create(t.Content, FadeInfo, {BackgroundTransparency = 1}):Play()
+                TweenService:Create(t.Content, FadeTweenInfo, {BackgroundTransparency = 1}):Play()
                 t.Content.Visible = false
             end
             TabContentFrame.Visible = true
             TweenService:Create(TabButton, TweenInfo.new(0.2), {BackgroundTransparency = 0}):Play()
-            TweenService:Create(TabContentFrame, TweenInfo.new(0.3), {BackgroundTransparency = 0}):Play()
+            TweenService:Create(TabContentFrame, DefaultTweenInfo, {BackgroundTransparency = 0}):Play()
             currentTab = TabContentFrame
         end)
 
@@ -283,8 +283,8 @@ function HuangUI:CreateWindow(options)
             SectionLabel.TextXAlignment = Enum.TextXAlignment.Left
             SectionLabel.TextTransparency = 1
 
-            TweenService:Create(SectionFrame, TweenInfo, {BackgroundTransparency = 0}):Play()
-            TweenService:Create(SectionLabel, TweenInfo, {TextTransparency = 0}):Play()
+            TweenService:Create(SectionFrame, DefaultTweenInfo, {BackgroundTransparency = 0}):Play()
+            TweenService:Create(SectionLabel, DefaultTweenInfo, {TextTransparency = 0}):Play()
 
             sectionY = sectionY + 40
 
@@ -310,13 +310,13 @@ function HuangUI:CreateWindow(options)
                 Button.TextSize = 14
                 Button.BackgroundTransparency = 1
 
-                TweenService:Create(Button, TweenInfo, {BackgroundTransparency = 0}):Play()
+                TweenService:Create(Button, DefaultTweenInfo, {BackgroundTransparency = 0}):Play()
 
                 addHover(Button, CurrentTheme.Accent)
 
                 Button.MouseButton1Click:Connect(function()
                     TweenService:Create(Button, TweenInfo.new(0.1, Enum.EasingStyle.Back, Enum.EasingDirection.InOut), {Size = UDim2.new(1, -20, 0, 28)}):Play()
-                    wait(0.1)
+                    task.wait(0.1)
                     TweenService:Create(Button, TweenInfo.new(0.1), {Size = UDim2.new(1, -20, 0, 30)}):Play()
                     callback()
                 end)
@@ -366,15 +366,15 @@ function HuangUI:CreateWindow(options)
                 ToggleButton.TextColor3 = CurrentTheme.Text
                 ToggleButton.BackgroundTransparency = 1
 
-                TweenService:Create(ToggleFrame, TweenInfo, {BackgroundTransparency = 0}):Play()
-                TweenService:Create(ToggleLabel, TweenInfo, {TextTransparency = 0}):Play()
-                TweenService:Create(ToggleButton, TweenInfo, {BackgroundTransparency = 0}):Play()
+                TweenService:Create(ToggleFrame, DefaultTweenInfo, {BackgroundTransparency = 0}):Play()
+                TweenService:Create(ToggleLabel, DefaultTweenInfo, {TextTransparency = 0}):Play()
+                TweenService:Create(ToggleButton, DefaultTweenInfo, {BackgroundTransparency = 0}):Play()
 
                 local state = default
                 ToggleButton.MouseButton1Click:Connect(function()
                     state = not state
                     TweenService:Create(ToggleButton, TweenInfo.new(0.2), {BackgroundColor3 = state and CurrentTheme.Accent or Color3.fromRGB(100, 100, 100), Size = UDim2.new(0, 18, 0, 18)}):Play()
-                    wait(0.1)
+                    task.wait(0.1)
                     TweenService:Create(ToggleButton, TweenInfo.new(0.1), {Size = UDim2.new(0, 20, 0, 20)}):Play()
                     callback(state)
                 end)
@@ -432,10 +432,10 @@ function HuangUI:CreateWindow(options)
                 SliderFill.Position = UDim2.new(0, 0, 0, 0)
                 SliderFill.BackgroundTransparency = 1
 
-                TweenService:Create(SliderFrame, TweenInfo, {BackgroundTransparency = 0}):Play()
-                TweenService:Create(SliderLabel, TweenInfo, {TextTransparency = 0}):Play()
-                TweenService:Create(SliderBar, TweenInfo, {BackgroundTransparency = 0}):Play()
-                TweenService:Create(SliderFill, TweenInfo, {BackgroundTransparency = 0}):Play()
+                TweenService:Create(SliderFrame, DefaultTweenInfo, {BackgroundTransparency = 0}):Play()
+                TweenService:Create(SliderLabel, DefaultTweenInfo, {TextTransparency = 0}):Play()
+                TweenService:Create(SliderBar, DefaultTweenInfo, {BackgroundTransparency = 0}):Play()
+                TweenService:Create(SliderFill, DefaultTweenInfo, {BackgroundTransparency = 0}):Play()
 
                 local dragging = false
                 local value = default
@@ -465,7 +465,7 @@ function HuangUI:CreateWindow(options)
 
                 elementY = elementY + 60
 
-                return {Slider = SliderBar, Set = function(val) value = val; local rel = (val - min) / (max - min); TweenService:Create(SliderFill, TweenInfo, {Size = UDim2.new(rel, 0, 1, 0)}):Play(); SliderLabel.Text = sliderText .. ": " .. val; callback(val) end}
+                return {Slider = SliderBar, Set = function(val) value = val; local rel = (val - min) / (max - min); TweenService:Create(SliderFill, DefaultTweenInfo, {Size = UDim2.new(rel, 0, 1, 0)}):Play(); SliderLabel.Text = sliderText .. ": " .. val; callback(val) end}
             end
 
             function section:AddDropdown(options)
@@ -538,30 +538,30 @@ function HuangUI:CreateWindow(options)
                     ListItem.MouseButton1Click:Connect(function()
                         DropdownButton.Text = val
                         callback(val)
-                        TweenService:Create(DropdownList, TweenInfo, {Size = UDim2.new(1, 0, 0, 0)}):Play()
+                        TweenService:Create(DropdownList, DefaultTweenInfo, {Size = UDim2.new(1, 0, 0, 0)}):Play()
                         DropdownList.Visible = false
                     end)
                 end
 
-                TweenService:Create(DropdownFrame, TweenInfo, {BackgroundTransparency = 0}):Play()
-                TweenService:Create(DropdownLabel, TweenInfo, {TextTransparency = 0}):Play()
-                TweenService:Create(DropdownButton, TweenInfo, {BackgroundTransparency = 0}):Play()
+                TweenService:Create(DropdownFrame, DefaultTweenInfo, {BackgroundTransparency = 0}):Play()
+                TweenService:Create(DropdownLabel, DefaultTweenInfo, {TextTransparency = 0}):Play()
+                TweenService:Create(DropdownButton, DefaultTweenInfo, {BackgroundTransparency = 0}):Play()
 
                 addHover(DropdownButton, Color3.fromRGB(70, 70, 80))
 
                 DropdownButton.MouseButton1Click:Connect(function()
                     if DropdownList.Visible then
-                        TweenService:Create(DropdownList, TweenInfo, {Size = UDim2.new(1, 0, 0, 0)}):Play()
-                        wait(0.3)
+                        TweenService:Create(DropdownList, DefaultTweenInfo, {Size = UDim2.new(1, 0, 0, 0)}):Play()
+                        task.wait(0.3)
                         DropdownList.Visible = false
                     else
                         DropdownList.Visible = true
-                        TweenService:Create(DropdownList, TweenInfo, {Size = UDim2.new(1, 0, 0, #values * 30), BackgroundTransparency = 0}):Play()
+                        TweenService:Create(DropdownList, DefaultTweenInfo, {Size = UDim2.new(1, 0, 0, #values * 30), BackgroundTransparency = 0}):Play()
                         for i, item in ipairs(DropdownList:GetChildren()) do
                             if item:IsA("TextButton") then
                                 spawn(function()
-                                    wait((i-1)*0.05)
-                                    TweenService:Create(item, TweenInfo, {BackgroundTransparency = 0, TextTransparency = 0}):Play()
+                                    task.wait((i-1)*0.05)
+                                    TweenService:Create(item, DefaultTweenInfo, {BackgroundTransparency = 0, TextTransparency = 0}):Play()
                                 end)
                             end
                         end
@@ -608,23 +608,23 @@ function HuangUI:CreateWindow(options)
                 ColorButton.Text = ""
                 ColorButton.BackgroundTransparency = 1
 
-                TweenService:Create(ColorFrame, TweenInfo, {BackgroundTransparency = 0}):Play()
-                TweenService:Create(ColorLabel, TweenInfo, {TextTransparency = 0}):Play()
-                TweenService:Create(ColorButton, TweenInfo, {BackgroundTransparency = 0}):Play()
+                TweenService:Create(ColorFrame, DefaultTweenInfo, {BackgroundTransparency = 0}):Play()
+                TweenService:Create(ColorLabel, DefaultTweenInfo, {TextTransparency = 0}):Play()
+                TweenService:Create(ColorButton, DefaultTweenInfo, {BackgroundTransparency = 0}):Play()
 
                 addHover(ColorButton, Color3.fromRGB(255, 255, 255))
 
                 ColorButton.MouseButton1Click:Connect(function()
                     TweenService:Create(ColorButton, TweenInfo.new(0.1), {Size = UDim2.new(0, 18, 1, 0)}):Play()
-                    wait(0.1)
+                    task.wait(0.1)
                     default = Color3.fromRGB(math.random(0,255), math.random(0,255), math.random(0,255))
-                    TweenService:Create(ColorButton, TweenInfo, {BackgroundColor3 = default, Size = UDim2.new(0, 20, 1, 0)}):Play()
+                    TweenService:Create(ColorButton, DefaultTweenInfo, {BackgroundColor3 = default, Size = UDim2.new(0, 20, 1, 0)}):Play()
                     callback(default)
                 end)
 
                 elementY = elementY + 40
 
-                return {Button = ColorButton, Set = function(color) default = color; TweenService:Create(ColorButton, TweenInfo, {BackgroundColor3 = color}):Play(); callback(color) end}
+                return {Button = ColorButton, Set = function(color) default = color; TweenService:Create(ColorButton, DefaultTweenInfo, {BackgroundColor3 = color}):Play(); callback(color) end}
             end
 
             function section:AddKeybind(options)
@@ -666,9 +666,9 @@ function HuangUI:CreateWindow(options)
                 KeyButton.TextSize = 10
                 KeyButton.BackgroundTransparency = 1
 
-                TweenService:Create(KeyFrame, TweenInfo, {BackgroundTransparency = 0}):Play()
-                TweenService:Create(KeyLabel, TweenInfo, {TextTransparency = 0}):Play()
-                TweenService:Create(KeyButton, TweenInfo, {BackgroundTransparency = 0}):Play()
+                TweenService:Create(KeyFrame, DefaultTweenInfo, {BackgroundTransparency = 0}):Play()
+                TweenService:Create(KeyLabel, DefaultTweenInfo, {TextTransparency = 0}):Play()
+                TweenService:Create(KeyButton, DefaultTweenInfo, {BackgroundTransparency = 0}):Play()
 
                 addHover(KeyButton, Color3.fromRGB(70, 70, 80))
 
@@ -676,8 +676,8 @@ function HuangUI:CreateWindow(options)
                 KeyButton.MouseButton1Click:Connect(function()
                     binding = true
                     TweenService:Create(KeyButton, TweenInfo.new(0.5, Enum.EasingStyle.Bounce), {Size = UDim2.new(0, 25, 1, 0)}):Play()
-                    wait(0.2)
-                    TweenService:Create(KeyButton, TweenInfo, {Size = UDim2.new(0, 20, 1, 0)}):Play()
+                    task.wait(0.2)
+                    TweenService:Create(KeyButton, DefaultTweenInfo, {Size = UDim2.new(0, 20, 1, 0)}):Play()
                     KeyButton.Text = "..."
                 end)
 
@@ -692,7 +692,7 @@ function HuangUI:CreateWindow(options)
 
                 elementY = elementY + 40
 
-                return {Button = KeyButton, Set = function(key) default = key; TweenService:Create(KeyButton, TweenInfo, {Text = key.Name}):Play(); callback(key) end}
+                return {Button = KeyButton, Set = function(key) default = key; KeyButton.Text = key.Name; callback(key) end}
             end
 
             function section:AddParagraph(options)
@@ -734,9 +734,9 @@ function HuangUI:CreateWindow(options)
                 ParaDesc.TextWrapped = true
                 ParaDesc.TextTransparency = 1
 
-                TweenService:Create(ParaFrame, TweenInfo, {BackgroundTransparency = 0}):Play()
-                TweenService:Create(ParaTitle, TweenInfo, {TextTransparency = 0}):Play()
-                TweenService:Create(ParaDesc, TweenInfo, {TextTransparency = 0}):Play()
+                TweenService:Create(ParaFrame, DefaultTweenInfo, {BackgroundTransparency = 0}):Play()
+                TweenService:Create(ParaTitle, DefaultTweenInfo, {TextTransparency = 0}):Play()
+                TweenService:Create(ParaDesc, DefaultTweenInfo, {TextTransparency = 0}):Play()
 
                 elementY = elementY + 70
 
@@ -784,18 +784,18 @@ function HuangUI:CreateWindow(options)
                 InputBox.BackgroundTransparency = 1
                 InputBox.TextTransparency = 1
 
-                TweenService:Create(InputFrame, TweenInfo, {BackgroundTransparency = 0}):Play()
-                TweenService:Create(InputLabel, TweenInfo, {TextTransparency = 0}):Play()
-                TweenService:Create(InputBox, TweenInfo, {BackgroundTransparency = 0, TextTransparency = 0}):Play()
+                TweenService:Create(InputFrame, DefaultTweenInfo, {BackgroundTransparency = 0}):Play()
+                TweenService:Create(InputLabel, DefaultTweenInfo, {TextTransparency = 0}):Play()
+                TweenService:Create(InputBox, DefaultTweenInfo, {BackgroundTransparency = 0, TextTransparency = 0}):Play()
 
                 addHover(InputBox, Color3.fromRGB(70, 70, 80))
 
                 InputBox.Focused:Connect(function()
-                    TweenService:Create(InputBox, TweenInfo, {BackgroundColor3 = CurrentTheme.Background}):Play()
+                    TweenService:Create(InputBox, DefaultTweenInfo, {BackgroundColor3 = CurrentTheme.Background}):Play()
                 end)
 
                 InputBox.FocusLost:Connect(function()
-                    TweenService:Create(InputBox, TweenInfo, {BackgroundColor3 = CurrentTheme.Accent}):Play()
+                    TweenService:Create(InputBox, DefaultTweenInfo, {BackgroundColor3 = CurrentTheme.Accent}):Play()
                     callback(InputBox.Text)
                 end)
 
@@ -814,7 +814,7 @@ function HuangUI:CreateWindow(options)
                 SepFrame.Position = UDim2.new(0, 10, 0, sectionY + elementY)
                 SepFrame.BackgroundTransparency = 1
 
-                TweenService:Create(SepFrame, TweenInfo, {Size = UDim2.new(1, -20, 0, 1), BackgroundTransparency = 0}):Play()
+                TweenService:Create(SepFrame, DefaultTweenInfo, {Size = UDim2.new(1, -20, 0, 1), BackgroundTransparency = 0}):Play()
 
                 elementY = elementY + 10
 
@@ -831,9 +831,9 @@ function HuangUI:CreateWindow(options)
 
     function window:SetTheme(newTheme)
         CurrentTheme = Themes[newTheme] or CurrentTheme
-        TweenService:Create(MainFrame, TweenInfo, {BackgroundColor3 = CurrentTheme.Background}):Play()
-        TweenService:Create(TitleBar, TweenInfo, {BackgroundColor3 = CurrentTheme.Accent}):Play()
-        TweenService:Create(TitleLabel, TweenInfo, {TextColor3 = CurrentTheme.Text}):Play()
+        TweenService:Create(MainFrame, DefaultTweenInfo, {BackgroundColor3 = CurrentTheme.Background}):Play()
+        TweenService:Create(TitleBar, DefaultTweenInfo, {BackgroundColor3 = CurrentTheme.Accent}):Play()
+        TweenService:Create(TitleLabel, DefaultTweenInfo, {TextColor3 = CurrentTheme.Text}):Play()
     end
 
     return window
