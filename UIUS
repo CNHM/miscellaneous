@@ -1,9 +1,13 @@
--- MobileUILib.lua
--- 一个简单的 Roblox 手机版 UI 库，优化自适应屏幕。更新：添加下拉菜单组件。
+-- MobileUILib.lua (整合 UIUS v1.0)
+-- 一个简单的 Roblox 手机版 UI 库，优化自适应屏幕。整合 UIUS 实用函数。
 
 local MobileUILib = {}
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local LocalPlayer = Players.LocalPlayer
 
 -- 主题定义
 local Themes = {
@@ -23,7 +27,81 @@ local Themes = {
     }
 }
 
--- 创建主窗口
+-- UIUS: 创建基本 Frame（手机版自适应）
+function MobileUILib:CreateFrame(parent, name, size, position, backgroundColor, borderSize, borderColor, theme)
+    theme = theme or Themes.Dark
+    local frame = Instance.new("Frame")
+    frame.Name = name or "Frame"
+    frame.Size = size or UDim2.fromScale(0.9, 0.1)  -- 默认自适应
+    frame.Position = position or UDim2.fromScale(0, 0)
+    frame.BackgroundColor3 = backgroundColor or theme.Background
+    frame.BorderSizePixel = borderSize or 0
+    frame.BorderColor3 = borderColor or theme.Border
+    frame.Parent = parent
+    return frame
+end
+
+-- UIUS: 添加标签（手机版自适应）
+function MobileUILib:AddLabel(parent, text, size, position, textColor, textSize, theme)
+    theme = theme or Themes.Dark
+    local label = Instance.new("TextLabel")
+    label.Name = "Label"
+    label.Size = size or UDim2.fromScale(1, 0.5)
+    label.Position = position or UDim2.fromScale(0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = text or ""
+    label.TextColor3 = textColor or theme.Text
+    label.TextScaled = true
+    label.Font = Enum.Font.Gotham
+    label.TextSize = textSize or 18  -- 手机版字体大小
+    label.Parent = parent
+    return label
+end
+
+-- UIUS: 创建滚动 Frame（手机版优化）
+function MobileUILib:CreateScrollingFrame(parent, size, position, canvasSize, backgroundColor, theme)
+    theme = theme or Themes.Dark
+    local scrollFrame = Instance.new("ScrollingFrame")
+    scrollFrame.Name = "ScrollingFrame"
+    scrollFrame.Size = size or UDim2.fromScale(1, 1)
+    scrollFrame.Position = position or UDim2.fromScale(0, 0)
+    scrollFrame.CanvasSize = canvasSize or UDim2.fromScale(0, 0)
+    scrollFrame.BackgroundColor3 = backgroundColor or theme.Frame
+    scrollFrame.BorderSizePixel = 0
+    scrollFrame.ScrollBarThickness = 6  -- 移动端友好
+    scrollFrame.Parent = parent
+    return scrollFrame
+end
+
+-- UIUS: 创建 Tween
+function MobileUILib:CreateTween(element, properties, time, easingStyle, easingDirection)
+    local tweenInfo = TweenInfo.new(
+        time or 0.5,
+        Enum.EasingStyle[easingStyle or "Quad"],
+        Enum.EasingDirection[easingDirection or "Out"]
+    )
+    local tween = TweenService:Create(element, tweenInfo, properties)
+    return tween
+end
+
+-- UIUS: 绑定值到 UI 元素
+function MobileUILib:BindValue(element, property, value)
+    if typeof(element) == "Instance" and element:IsA("GuiObject") then
+        element[property] = value
+    end
+end
+
+-- UIUS: 更新玩家统计（示例：健康值）
+function MobileUILib:UpdatePlayerStats(label, player)
+    player = player or LocalPlayer
+    local character = player.Character
+    if character and character:FindFirstChild("Humanoid") then
+        local health = character.Humanoid.Health
+        label.Text = "健康: " .. math.floor(health)
+    end
+end
+
+-- 原有：创建主窗口（增强 UIUS 整合）
 function MobileUILib:CreateWindow(title, theme)
     theme = theme or "Dark"
     local themeData = Themes[theme]
@@ -31,63 +109,33 @@ function MobileUILib:CreateWindow(title, theme)
     -- 创建 ScreenGui
     local screenGui = Instance.new("ScreenGui")
     screenGui.Name = "MobileUI"
-    screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
-    screenGui.IgnoreGuiInset = true  -- 忽略顶部栏，优化移动
+    screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+    screenGui.IgnoreGuiInset = true
     
-    -- 主 Frame（窗口）
-    local mainFrame = Instance.new("Frame")
-    mainFrame.Name = "MainFrame"
-    mainFrame.Size = UDim2.fromScale(0.9, 0.8)  -- 移动自适应：90% 宽度，80% 高度
-    mainFrame.Position = UDim2.fromScale(0.05, 0.1)  -- 居中偏移
-    mainFrame.BackgroundColor3 = themeData.Background
-    mainFrame.BorderSizePixel = 0
-    mainFrame.Parent = screenGui
+    -- 主 Frame（使用 UIUS CreateFrame）
+    local mainFrame = self:CreateFrame(screenGui, "MainFrame", UDim2.fromScale(0.9, 0.8), UDim2.fromScale(0.05, 0.1), themeData.Background, 0, themeData.Border, themeData)
     
     -- 圆角
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, 12)
     corner.Parent = mainFrame
     
-    -- 标题栏
-    local titleBar = Instance.new("Frame")
-    titleBar.Name = "TitleBar"
-    titleBar.Size = UDim2.fromScale(1, 0.08)
-    titleBar.Position = UDim2.fromScale(0, 0)
-    titleBar.BackgroundColor3 = themeData.Accent
-    titleBar.BorderSizePixel = 0
-    titleBar.Parent = mainFrame
-    
+    -- 标题栏（使用 UIUS AddLabel）
+    local titleBar = self:CreateFrame(mainFrame, "TitleBar", UDim2.fromScale(1, 0.08), UDim2.fromScale(0, 0), themeData.Accent, 0, themeData.Border, themeData)
     local titleCorner = Instance.new("UICorner")
     titleCorner.CornerRadius = UDim.new(0, 12)
     titleCorner.Parent = titleBar
+    local titleLabel = self:AddLabel(titleBar, title, UDim2.fromScale(1, 1), UDim2.fromScale(0, 0), themeData.Text, 20, themeData)
     
-    local titleLabel = Instance.new("TextLabel")
-    titleLabel.Name = "Title"
-    titleLabel.Size = UDim2.fromScale(1, 1)
-    titleLabel.BackgroundTransparency = 1
-    titleLabel.Text = title
-    titleLabel.TextColor3 = themeData.Text
-    titleLabel.TextScaled = true
-    titleLabel.Font = Enum.Font.GothamBold
-    titleLabel.Parent = titleBar
-    
-    -- 滚动内容区域
-    local scrollFrame = Instance.new("ScrollingFrame")
-    scrollFrame.Name = "Content"
-    scrollFrame.Size = UDim2.fromScale(1, 0.92)
-    scrollFrame.Position = UDim2.fromScale(0, 0.08)
-    scrollFrame.BackgroundTransparency = 1
-    scrollFrame.BorderSizePixel = 0
-    scrollFrame.ScrollBarThickness = 6  -- 移动端友好滚动条
-    scrollFrame.CanvasSize = UDim2.fromScale(0, 0)
-    scrollFrame.Parent = mainFrame
+    -- 滚动内容区域（使用 UIUS CreateScrollingFrame）
+    local scrollFrame = self:CreateScrollingFrame(mainFrame, UDim2.fromScale(1, 0.92), UDim2.fromScale(0, 0.08), UDim2.fromScale(0, 0), themeData.Frame, themeData)
     
     local listLayout = Instance.new("UIListLayout")
     listLayout.SortOrder = Enum.SortOrder.LayoutOrder
     listLayout.Padding = UDim.new(0, 8)
     listLayout.Parent = scrollFrame
     
-    -- 拖拽支持（移动端触摸拖拽）
+    -- 拖拽支持
     local dragging = false
     local dragStart = nil
     local startPos = nil
@@ -128,7 +176,7 @@ function MobileUILib:CreateWindow(title, theme)
     return window
 end
 
--- 添加按钮
+-- 原有：添加按钮（增强 UIUS AddButton）
 function MobileUILib:AddButton(window, text, callback)
     local button = Instance.new("TextButton")
     button.Name = "Button"
@@ -146,22 +194,24 @@ function MobileUILib:AddButton(window, text, callback)
     buttonCorner.Parent = button
     
     local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    local hoverTween = self:CreateTween(button, {BackgroundColor3 = window.Theme.Accent}, 0.2, "Quad", "Out")
+    local normalTween = self:CreateTween(button, {BackgroundColor3 = window.Theme.Frame}, 0.2, "Quad", "In")
+    
     button.MouseButton1Click:Connect(function()
-        local tween = TweenService:Create(button, tweenInfo, {BackgroundColor3 = window.Theme.Accent})
-        tween:Play()
-        tween.Completed:Connect(function()
-            TweenService:Create(button, tweenInfo, {BackgroundColor3 = window.Theme.Frame}):Play()
+        hoverTween:Play()
+        hoverTween.Completed:Connect(function()
+            normalTween:Play()
         end)
         callback()
     end)
     
-    button.TouchTap:Connect(callback)  -- 移动端触摸支持
+    button.TouchTap:Connect(callback)
     
     window.UpdateCanvas()
     return button
 end
 
--- 添加滑块（简单数值滑块）
+-- 原有：添加滑块（不变）
 function MobileUILib:AddSlider(window, text, min, max, default, callback)
     min = min or 0
     max = max or 100
@@ -233,7 +283,7 @@ function MobileUILib:AddSlider(window, text, min, max, default, callback)
     return container
 end
 
--- 添加切换按钮（Toggle）
+-- 原有：添加切换按钮（不变）
 function MobileUILib:AddToggle(window, text, default, callback)
     default = default or false
     
@@ -264,7 +314,7 @@ function MobileUILib:AddToggle(window, text, default, callback)
     toggleButton.Parent = container
     
     local toggleCorner = Instance.new("UICorner")
-    toggleCorner.CornerRadius = UDim.new(0, 20)  -- 圆形切换
+    toggleCorner.CornerRadius = UDim.new(0, 20)
     toggleCorner.Parent = toggleButton
     
     local function updateToggle(value)
@@ -286,7 +336,7 @@ function MobileUILib:AddToggle(window, text, default, callback)
     return container
 end
 
--- 添加输入框
+-- 原有：添加输入框（不变）
 function MobileUILib:AddInput(window, text, placeholder, callback)
     local container = Instance.new("Frame")
     container.Name = "InputContainer"
@@ -325,7 +375,7 @@ function MobileUILib:AddInput(window, text, placeholder, callback)
     inputBox.FocusLost:Connect(function(enterPressed)
         callback(inputBox.Text)
         if enterPressed then
-            inputBox.Text = ""  -- 清空输入
+            inputBox.Text = ""
         end
     end)
     
@@ -333,7 +383,7 @@ function MobileUILib:AddInput(window, text, placeholder, callback)
     return container
 end
 
--- 新增：添加下拉菜单
+-- 原有：添加下拉菜单（不变）
 function MobileUILib:AddDropdown(window, text, options, defaultIndex, callback)
     options = options or {}
     defaultIndex = defaultIndex or 1
@@ -360,7 +410,7 @@ function MobileUILib:AddDropdown(window, text, options, defaultIndex, callback)
     dropdownButton.Size = UDim2.fromScale(1, 0.4)
     dropdownButton.Position = UDim2.fromScale(0, 0.4)
     dropdownButton.BackgroundColor3 = window.Theme.Frame
-    dropdownButton.Text = selectedValue .. " ▼"  -- 显示选中项 + 箭头
+    dropdownButton.Text = selectedValue .. " ▼"
     dropdownButton.TextColor3 = window.Theme.Text
     dropdownButton.TextScaled = true
     dropdownButton.Font = Enum.Font.Gotham
@@ -371,13 +421,12 @@ function MobileUILib:AddDropdown(window, text, options, defaultIndex, callback)
     dropdownCorner.CornerRadius = UDim.new(0, 6)
     dropdownCorner.Parent = dropdownButton
     
-    -- 下拉列表 Frame
     local dropdownList = Instance.new("ScrollingFrame")
     dropdownList.Name = "DropdownList"
     dropdownList.Size = UDim2.fromScale(1, 0)
     dropdownList.Position = UDim2.fromScale(0, 0.08)
     dropdownList.BackgroundColor3 = window.Theme.Frame
-    dropdownList.BackgroundTransparency = 1  -- 初始隐藏
+    dropdownList.BackgroundTransparency = 1
     dropdownList.BorderSizePixel = 0
     dropdownList.ScrollBarThickness = 4
     dropdownList.CanvasSize = UDim2.fromScale(0, 0)
@@ -393,12 +442,11 @@ function MobileUILib:AddDropdown(window, text, options, defaultIndex, callback)
     optionLayout.Padding = UDim.new(0, 2)
     optionLayout.Parent = dropdownList
     
-    -- 动态生成选项按钮
     local function createOptions()
         for i, option in ipairs(options) do
             local optionBtn = Instance.new("TextButton")
             optionBtn.Name = "Option" .. i
-            optionBtn.Size = UDim2.fromScale(1, 0.12)  -- 每个选项高度自适应
+            optionBtn.Size = UDim2.fromScale(1, 0.12)
             optionBtn.BackgroundColor3 = window.Theme.Border
             optionBtn.Text = option
             optionBtn.TextColor3 = window.Theme.Text
@@ -415,7 +463,7 @@ function MobileUILib:AddDropdown(window, text, options, defaultIndex, callback)
                 selectedValue = option
                 dropdownButton.Text = selectedValue .. " ▼"
                 dropdownList.Visible = false
-                callback(option, i)  -- 回调：选中值和索引
+                callback(option, i)
                 window.UpdateCanvas()
             end)
             
@@ -432,7 +480,6 @@ function MobileUILib:AddDropdown(window, text, options, defaultIndex, callback)
     
     createOptions()
     
-    -- 展开/收起逻辑
     local isOpen = false
     local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
     
@@ -440,11 +487,11 @@ function MobileUILib:AddDropdown(window, text, options, defaultIndex, callback)
         isOpen = not isOpen
         dropdownList.Visible = isOpen
         if isOpen then
-            dropdownList.Size = UDim2.fromScale(1, math.min(#options * 0.12, 0.3))  -- 最大高度 30% 容器
+            dropdownList.Size = UDim2.fromScale(1, math.min(#options * 0.12, 0.3))
         else
             dropdownList.Size = UDim2.fromScale(1, 0)
         end
-        TweenService:Create(dropdownButton, tweenInfo, {Rotation = isOpen and 180 or 0}):Play()  -- 旋转箭头（需调整 Text 为带箭头图标）
+        self:CreateTween(dropdownButton, {Rotation = isOpen and 180 or 0}, 0.2):Play()
         window.UpdateCanvas()
     end)
     
@@ -456,16 +503,15 @@ function MobileUILib:AddDropdown(window, text, options, defaultIndex, callback)
         else
             dropdownList.Size = UDim2.fromScale(1, 0)
         end
-        TweenService:Create(dropdownButton, tweenInfo, {Rotation = isOpen and 180 or 0}):Play()
+        self:CreateTween(dropdownButton, {Rotation = isOpen and 180 or 0}, 0.2):Play()
         window.UpdateCanvas()
     end)
     
-    -- 点击外部关闭（简单实现：监听 UserInputService）
     UserInputService.InputBegan:Connect(function(input)
         if isOpen and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
             local mousePos = UserInputService:GetMouseLocation()
-            if not dropdownList.AbsolutePosition.X <= mousePos.X and mousePos.X <= dropdownList.AbsolutePosition.X + dropdownList.AbsoluteSize.X and
-               not dropdownList.AbsolutePosition.Y <= mousePos.Y and mousePos.Y <= dropdownList.AbsolutePosition.Y + dropdownList.AbsoluteSize.Y then
+            if not (dropdownList.AbsolutePosition.X <= mousePos.X and mousePos.X <= dropdownList.AbsolutePosition.X + dropdownList.AbsoluteSize.X and
+                    dropdownList.AbsolutePosition.Y <= mousePos.Y and mousePos.Y <= dropdownList.AbsolutePosition.Y + dropdownList.AbsoluteSize.Y) then
                 isOpen = false
                 dropdownList.Visible = false
                 dropdownList.Size = UDim2.fromScale(1, 0)
@@ -478,17 +524,23 @@ function MobileUILib:AddDropdown(window, text, options, defaultIndex, callback)
     return container
 end
 
--- 切换主题
+-- 原有：切换主题（增强：更新所有 Frame/Label）
 function MobileUILib:SwitchTheme(window, newTheme)
     local themeData = Themes[newTheme]
     window.Theme = themeData
-    -- 更新主 Frame 颜色
     window.MainFrame.BackgroundColor3 = themeData.Background
-    -- 这里可以扩展更新所有子元素颜色
+    -- 简单更新：可扩展为递归更新子元素
+    for _, child in ipairs(window.ScrollFrame:GetChildren()) do
+        if child:IsA("Frame") then
+            child.BackgroundColor3 = themeData.Frame
+        elseif child:IsA("TextLabel") then
+            child.TextColor3 = themeData.Text
+        end
+    end
     print("主题切换到: " .. newTheme)
 end
 
--- 销毁窗口
+-- 原有：销毁窗口
 function MobileUILib:Destroy(window)
     window.ScreenGui:Destroy()
 end
