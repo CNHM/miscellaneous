@@ -1,5 +1,5 @@
 -- MobileUILib.lua
--- 一个简单的 Roblox 手机版 UI 库，优化自适应屏幕。
+-- 一个简单的 Roblox 手机版 UI 库，优化自适应屏幕。更新：添加下拉菜单组件。
 
 local MobileUILib = {}
 local TweenService = game:GetService("TweenService")
@@ -326,6 +326,151 @@ function MobileUILib:AddInput(window, text, placeholder, callback)
         callback(inputBox.Text)
         if enterPressed then
             inputBox.Text = ""  -- 清空输入
+        end
+    end)
+    
+    window.UpdateCanvas()
+    return container
+end
+
+-- 新增：添加下拉菜单
+function MobileUILib:AddDropdown(window, text, options, defaultIndex, callback)
+    options = options or {}
+    defaultIndex = defaultIndex or 1
+    local selectedValue = options[defaultIndex] or "无选项"
+    
+    local container = Instance.new("Frame")
+    container.Name = "DropdownContainer"
+    container.Size = UDim2.fromScale(1, 0.08)
+    container.BackgroundTransparency = 1
+    container.Parent = window.ScrollFrame
+    
+    local label = Instance.new("TextLabel")
+    label.Name = "Label"
+    label.Size = UDim2.fromScale(1, 0.4)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = window.Theme.Text
+    label.TextScaled = true
+    label.Font = Enum.Font.Gotham
+    label.Parent = container
+    
+    local dropdownButton = Instance.new("TextButton")
+    dropdownButton.Name = "DropdownButton"
+    dropdownButton.Size = UDim2.fromScale(1, 0.4)
+    dropdownButton.Position = UDim2.fromScale(0, 0.4)
+    dropdownButton.BackgroundColor3 = window.Theme.Frame
+    dropdownButton.Text = selectedValue .. " ▼"  -- 显示选中项 + 箭头
+    dropdownButton.TextColor3 = window.Theme.Text
+    dropdownButton.TextScaled = true
+    dropdownButton.Font = Enum.Font.Gotham
+    dropdownButton.BorderSizePixel = 0
+    dropdownButton.Parent = container
+    
+    local dropdownCorner = Instance.new("UICorner")
+    dropdownCorner.CornerRadius = UDim.new(0, 6)
+    dropdownCorner.Parent = dropdownButton
+    
+    -- 下拉列表 Frame
+    local dropdownList = Instance.new("ScrollingFrame")
+    dropdownList.Name = "DropdownList"
+    dropdownList.Size = UDim2.fromScale(1, 0)
+    dropdownList.Position = UDim2.fromScale(0, 0.08)
+    dropdownList.BackgroundColor3 = window.Theme.Frame
+    dropdownList.BackgroundTransparency = 1  -- 初始隐藏
+    dropdownList.BorderSizePixel = 0
+    dropdownList.ScrollBarThickness = 4
+    dropdownList.CanvasSize = UDim2.fromScale(0, 0)
+    dropdownList.Visible = false
+    dropdownList.Parent = container
+    
+    local listCorner = Instance.new("UICorner")
+    listCorner.CornerRadius = UDim.new(0, 6)
+    listCorner.Parent = dropdownList
+    
+    local optionLayout = Instance.new("UIListLayout")
+    optionLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    optionLayout.Padding = UDim.new(0, 2)
+    optionLayout.Parent = dropdownList
+    
+    -- 动态生成选项按钮
+    local function createOptions()
+        for i, option in ipairs(options) do
+            local optionBtn = Instance.new("TextButton")
+            optionBtn.Name = "Option" .. i
+            optionBtn.Size = UDim2.fromScale(1, 0.12)  -- 每个选项高度自适应
+            optionBtn.BackgroundColor3 = window.Theme.Border
+            optionBtn.Text = option
+            optionBtn.TextColor3 = window.Theme.Text
+            optionBtn.TextScaled = true
+            optionBtn.Font = Enum.Font.Gotham
+            optionBtn.BorderSizePixel = 0
+            optionBtn.Parent = dropdownList
+            
+            local optCorner = Instance.new("UICorner")
+            optCorner.CornerRadius = UDim.new(0, 4)
+            optCorner.Parent = optionBtn
+            
+            optionBtn.MouseButton1Click:Connect(function()
+                selectedValue = option
+                dropdownButton.Text = selectedValue .. " ▼"
+                dropdownList.Visible = false
+                callback(option, i)  -- 回调：选中值和索引
+                window.UpdateCanvas()
+            end)
+            
+            optionBtn.TouchTap:Connect(function()
+                selectedValue = option
+                dropdownButton.Text = selectedValue .. " ▼"
+                dropdownList.Visible = false
+                callback(option, i)
+                window.UpdateCanvas()
+            end)
+        end
+        dropdownList.CanvasSize = UDim2.new(0, 0, 0, optionLayout.AbsoluteContentSize.Y + 4)
+    end
+    
+    createOptions()
+    
+    -- 展开/收起逻辑
+    local isOpen = false
+    local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    
+    dropdownButton.MouseButton1Click:Connect(function()
+        isOpen = not isOpen
+        dropdownList.Visible = isOpen
+        if isOpen then
+            dropdownList.Size = UDim2.fromScale(1, math.min(#options * 0.12, 0.3))  -- 最大高度 30% 容器
+        else
+            dropdownList.Size = UDim2.fromScale(1, 0)
+        end
+        TweenService:Create(dropdownButton, tweenInfo, {Rotation = isOpen and 180 or 0}):Play()  -- 旋转箭头（需调整 Text 为带箭头图标）
+        window.UpdateCanvas()
+    end)
+    
+    dropdownButton.TouchTap:Connect(function()
+        isOpen = not isOpen
+        dropdownList.Visible = isOpen
+        if isOpen then
+            dropdownList.Size = UDim2.fromScale(1, math.min(#options * 0.12, 0.3))
+        else
+            dropdownList.Size = UDim2.fromScale(1, 0)
+        end
+        TweenService:Create(dropdownButton, tweenInfo, {Rotation = isOpen and 180 or 0}):Play()
+        window.UpdateCanvas()
+    end)
+    
+    -- 点击外部关闭（简单实现：监听 UserInputService）
+    UserInputService.InputBegan:Connect(function(input)
+        if isOpen and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+            local mousePos = UserInputService:GetMouseLocation()
+            if not dropdownList.AbsolutePosition.X <= mousePos.X and mousePos.X <= dropdownList.AbsolutePosition.X + dropdownList.AbsoluteSize.X and
+               not dropdownList.AbsolutePosition.Y <= mousePos.Y and mousePos.Y <= dropdownList.AbsolutePosition.Y + dropdownList.AbsoluteSize.Y then
+                isOpen = false
+                dropdownList.Visible = false
+                dropdownList.Size = UDim2.fromScale(1, 0)
+                window.UpdateCanvas()
+            end
         end
     end)
     
