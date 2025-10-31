@@ -1,0 +1,399 @@
+-- =====================================================
+-- UI Library Module (UILib.lua)
+-- This is the core UI Library for Roblox Injector Environment
+-- Supports rounded corners (configurable), animations, tabs on left, custom title, search bar, glass-like buttons
+-- Usage: require this module in your script
+-- =====================================================
+
+local UILib = {}
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+
+-- Default Configuration
+local Config = {
+    CornerRadius = UDim.new(0, 8),  -- Default rounded corner radius
+    GlassTransparency = 0.3,  -- Slight glass effect transparency
+    AnimationTime = 0.2,  -- Animation duration for buttons/windows
+    SearchPlaceholder = "搜索",  -- Default search text
+}
+
+-- Utility Functions
+local function CreateCorner(parent, radius)
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = radius or Config.CornerRadius
+    corner.Parent = parent
+    return corner
+end
+
+local function CreateGlassButton(parent, text, callback)
+    local button = Instance.new("TextButton")
+    button.Size = UDim2.new(0, 100, 0, 30)
+    button.Position = UDim2.new(0, 0, 0, 0)
+    button.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    button.BackgroundTransparency = Config.GlassTransparency
+    button.Text = text or ""
+    button.TextColor3 = Color3.fromRGB(0, 0, 0)
+    button.TextScaled = true
+    button.Font = Enum.Font.GothamBold
+    button.Parent = parent
+    CreateCorner(button)
+    
+    -- Glass-like gradient effect
+    local gradient = Instance.new("UIGradient")
+    gradient.Color = ColorSequence.new{
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(200, 200, 200))
+    }
+    gradient.Rotation = 45
+    gradient.Parent = button
+    
+    -- Hover animation
+    local tweenInfo = TweenInfo.new(Config.AnimationTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    button.MouseEnter:Connect(function()
+        TweenService:Create(button, tweenInfo, {BackgroundTransparency = Config.GlassTransparency - 0.1, Size = UDim2.new(0, 105, 0, 32)}):Play()
+    end)
+    button.MouseLeave:Connect(function()
+        TweenService:Create(button, tweenInfo, {BackgroundTransparency = Config.GlassTransparency, Size = UDim2.new(0, 100, 0, 30)}):Play()
+    end)
+    
+    if callback then
+        button.MouseButton1Click:Connect(callback)
+    end
+    
+    return button
+end
+
+local function AnimateShrink(element, direction)
+    -- Shrink animation from outer to inner (scale down)
+    local tweenInfo = TweenInfo.new(Config.AnimationTime, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+    local targetSize = UDim2.new(0, 0, 0, 0)  -- Shrink to nothing
+    if direction == "min" then
+        targetSize = UDim2.new(1, 0, 0, 20)  -- Minimize to thin bar
+    elseif direction == "max" then
+        targetSize = UDim2.new(1, 0, 1, 0)  -- Maximize full
+    elseif direction == "close" then
+        targetSize = UDim2.new(0, 0, 0, 0)
+    end
+    TweenService:Create(element, tweenInfo, {Size = targetSize}):Play()
+    if direction == "close" then
+        element:Destroy()
+    end
+end
+
+-- Main UI Creator Function
+function UILib:CreateWindow(options)
+    options = options or {}
+    local title = options.Title or "UI Window"
+    local icon = options.Icon  -- ImageLabel for custom icon
+    local width = options.Width or 600
+    local height = options.Height or 400
+    
+    -- Main ScreenGui
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "UILibGui"
+    screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+    
+    -- Main Frame (Window)
+    local mainFrame = Instance.new("Frame")
+    mainFrame.Size = UDim2.new(0, width, 0, height)
+    mainFrame.Position = UDim2.new(0.5, -width/2, 0.5, -height/2)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    mainFrame.BorderSizePixel = 0
+    mainFrame.Parent = screenGui
+    CreateCorner(mainFrame, Config.CornerRadius)
+    
+    -- Title Bar
+    local titleBar = Instance.new("Frame")
+    titleBar.Size = UDim2.new(1, 0, 0, 40)
+    titleBar.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    titleBar.BorderSizePixel = 0
+    titleBar.Parent = mainFrame
+    CreateCorner(titleBar, Config.CornerRadius)
+    
+    -- Title (Left Upper Corner)
+    local titleLabel = Instance.new("TextLabel")
+    titleLabel.Size = UDim2.new(0, 200, 1, 0)
+    titleLabel.Position = UDim2.new(0, 10, 0, 0)
+    titleLabel.BackgroundTransparency = 1
+    titleLabel.Text = title
+    titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    titleLabel.Font = Enum.Font.GothamBold
+    titleLabel.TextScaled = true
+    titleLabel.Parent = titleBar
+    
+    -- Custom Icon next to Title (if provided, ensure it doesn't exceed)
+    if icon then
+        local titleIcon = Instance.new("ImageLabel")
+        titleIcon.Size = UDim2.new(0, 24, 0, 24)
+        titleIcon.Position = UDim2.new(0, 0, 0.5, -12)  -- Centered vertically
+        titleIcon.BackgroundTransparency = 1
+        titleIcon.Image = icon
+        titleIcon.Parent = titleLabel
+        titleLabel.Position = UDim2.new(0, 34, 0, 0)  -- Shift title right to fit icon
+        titleLabel.Size = UDim2.new(0, 166, 1, 0)  -- Adjust size
+    end
+    
+    -- Search Bar in Title Bar Middle
+    local searchFrame = Instance.new("Frame")
+    searchFrame.Size = UDim2.new(0, 200, 0, 24)
+    searchFrame.Position = UDim2.new(0.5, -100, 0.5, -12)
+    searchFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    searchFrame.BackgroundTransparency = 0.1
+    searchFrame.BorderSizePixel = 0
+    searchFrame.Parent = titleBar
+    CreateCorner(searchFrame, UDim.new(0, 12))  -- Rounded ends
+    
+    -- Magnifying Glass Icon (Left of text)
+    local searchIcon = Instance.new("ImageLabel")
+    searchIcon.Size = UDim2.new(0, 16, 0, 16)
+    searchIcon.Position = UDim2.new(0, 8, 0.5, -8)
+    searchIcon.BackgroundTransparency = 1
+    searchIcon.Image = "rbxassetid://3926305904"  -- Roblox magnifying glass icon ID (or custom)
+    searchIcon.ImageColor3 = Color3.fromRGB(150, 150, 150)
+    searchIcon.Parent = searchFrame
+    
+    -- Search TextBox
+    local searchBox = Instance.new("TextBox")
+    searchBox.Size = UDim2.new(1, -32, 1, 0)
+    searchBox.Position = UDim2.new(0, 24, 0, 0)
+    searchBox.BackgroundTransparency = 1
+    searchBox.Text = Config.SearchPlaceholder
+    searchBox.PlaceholderText = Config.SearchPlaceholder
+    searchBox.TextColor3 = Color3.fromRGB(150, 150, 150)
+    searchBox.TextXAlignment = Enum.TextXAlignment.Left
+    searchBox.Font = Enum.Font.Gotham
+    searchBox.TextScaled = true
+    searchBox.Parent = searchFrame
+    
+    -- Search Functionality (applies to all text elements in UI)
+    local searchResults = {}
+    searchBox.FocusLost:Connect(function(enterPressed)
+        if enterPressed then
+            local query = searchBox.Text:lower()
+            -- Recursive search through all descendants for Text properties
+            for _, obj in pairs(mainFrame:GetDescendants()) do
+                if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
+                    if obj.Text:lower():find(query) then
+                        table.insert(searchResults, obj)
+                        -- Highlight or log found texts (extend as needed)
+                        obj.TextColor3 = Color3.fromRGB(255, 0, 0)  -- Simple highlight
+                    end
+                end
+            end
+            -- Clear after delay or implement full search logic
+            wait(2)
+            for _, res in pairs(searchResults) do
+                if res and res.Parent then
+                    res.TextColor3 = Color3.fromRGB(255, 255, 255)  -- Reset
+                end
+            end
+            searchResults = {}
+        end
+    end)
+    
+    -- Window Control Buttons (Right Side of Title Bar)
+    local controlsFrame = Instance.new("Frame")
+    controlsFrame.Size = UDim2.new(0, 90, 1, 0)
+    controlsFrame.Position = UDim2.new(1, -90, 0, 0)
+    controlsFrame.BackgroundTransparency = 1
+    controlsFrame.Parent = titleBar
+    
+    -- Minimize Button
+    local minBtn = CreateGlassButton(controlsFrame, "-", function()
+        AnimateShrink(mainFrame, "min")
+    end)
+    minBtn.Size = UDim2.new(0, 30, 1, 0)
+    minBtn.Position = UDim2.new(0, 0, 0, 0)
+    
+    -- Maximize Button
+    local maxBtn = CreateGlassButton(controlsFrame, "□", function()
+        AnimateShrink(mainFrame, "max")
+    end)
+    maxBtn.Size = UDim2.new(0, 30, 1, 0)
+    maxBtn.Position = UDim2.new(0, 30, 0, 0)
+    
+    -- Close Button
+    local closeBtn = CreateGlassButton(controlsFrame, "×", function()
+        AnimateShrink(mainFrame, "close")
+    end)
+    closeBtn.Size = UDim2.new(0, 30, 1, 0)
+    closeBtn.Position = UDim2.new(0, 60, 0, 0)
+    closeBtn.BackgroundColor3 = Color3.fromRGB(255, 100, 100)
+    
+    -- Left Sidebar for Tabs
+    local sidebar = Instance.new("Frame")
+    sidebar.Size = UDim2.new(0, 150, 1, -40)
+    sidebar.Position = UDim2.new(0, 0, 0, 40)
+    sidebar.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    sidebar.BorderSizePixel = 0
+    sidebar.Parent = mainFrame
+    CreateCorner(sidebar, UDim.new(0, 0, 0, 8))  -- Only bottom-right corner rounded
+    
+    local tabContent = Instance.new("Frame")
+    tabContent.Size = UDim2.new(1, -150, 1, -40)
+    tabContent.Position = UDim2.new(0, 150, 0, 40)
+    tabContent.BackgroundTransparency = 1
+    tabContent.Parent = mainFrame
+    
+    -- Tab System
+    local tabs = {}
+    local currentTab = nil
+    
+    local function CreateTab(name, callback)
+        local tabBtn = Instance.new("TextButton")
+        tabBtn.Size = UDim2.new(1, 0, 0, 40)
+        tabBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+        tabBtn.Text = name
+        tabBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        tabBtn.Font = Enum.Font.Gotham
+        tabBtn.TextScaled = true
+        tabBtn.Parent = sidebar
+        CreateCorner(tabBtn)
+        
+        local tabFrame = Instance.new("Frame")
+        tabFrame.Size = UDim2.new(1, 0, 1, 0)
+        tabFrame.BackgroundTransparency = 1
+        tabFrame.Visible = false
+        tabFrame.Parent = tabContent
+        
+        tabBtn.MouseButton1Click:Connect(function()
+            if currentTab then
+                currentTab.Visible = false
+            end
+            currentTab = tabFrame
+            currentTab.Visible = true
+            -- Animate tab switch
+            TweenService:Create(tabFrame, TweenInfo.new(0.1), {BackgroundTransparency = 0}):Play()
+        end)
+        
+        if callback then
+            callback(tabFrame)
+        end
+        
+        table.insert(tabs, {button = tabBtn, frame = tabFrame})
+        return tabFrame
+    end
+    
+    -- Content Area Scrolling
+    local scrollingFrame = Instance.new("ScrollingFrame")
+    scrollingFrame.Size = UDim2.new(1, 0, 1, 0)
+    scrollingFrame.BackgroundTransparency = 1
+    scrollingFrame.ScrollBarThickness = 6
+    scrollingFrame.Parent = tabContent
+    
+    -- Draggable Window
+    local dragging = false
+    local dragStart = nil
+    local startPos = nil
+    titleBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            startPos = mainFrame.Position
+        end
+    end)
+    titleBar.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local delta = input.Position - dragStart
+            mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+    
+    -- Settings for Corner Radius (Accessible via a settings tab or global)
+    local function UpdateCornerRadius(radius)
+        Config.CornerRadius = UDim.new(0, radius)
+        for _, child in pairs(mainFrame:GetDescendants()) do
+            if child:IsA("UICorner") then
+                child.CornerRadius = Config.CornerRadius
+            end
+        end
+    end
+    
+    -- Expose public methods
+    self.UpdateCornerRadius = UpdateCornerRadius
+    self.CreateTab = CreateTab
+    self.GetMainFrame = function() return mainFrame end
+    
+    -- Example: Create default tabs
+    CreateTab("Home", function(frame)
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(1, 0, 1, 0)
+        label.BackgroundTransparency = 1
+        label.Text = "Welcome to Home Tab"
+        label.TextColor3 = Color3.fromRGB(255, 255, 255)
+        label.TextScaled = true
+        label.Parent = frame
+    end)
+    
+    -- Show first tab
+    if tabs[1] then
+        tabs[1].frame.Visible = true
+        currentTab = tabs[1].frame
+    end
+    
+    return self
+end
+
+-- Additional Components (Extendable)
+function UILib:CreateButton(parent, text, callback)
+    return CreateGlassButton(parent, text, callback)
+end
+
+function UILib:CreateLabel(parent, text)
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 0, 30)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.TextScaled = true
+    label.Font = Enum.Font.Gotham
+    label.Parent = parent
+    return label
+end
+
+function UILib:CreateTextBox(parent, placeholder)
+    local textbox = Instance.new("TextBox")
+    textbox.Size = UDim2.new(1, 0, 0, 30)
+    textbox.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    textbox.Text = ""
+    textbox.PlaceholderText = placeholder or ""
+    textbox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    textbox.Font = Enum.Font.Gotham
+    textbox.TextScaled = true
+    textbox.Parent = parent
+    CreateCorner(textbox)
+    return textbox
+end
+
+function UILib:CreateSlider(parent, min, max, default, callback)
+    -- Simple slider implementation (extend with more logic)
+    local sliderFrame = Instance.new("Frame")
+    sliderFrame.Size = UDim2.new(1, 0, 0, 30)
+    sliderFrame.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+    sliderFrame.Parent = parent
+    CreateCorner(sliderFrame)
+    
+    local sliderBar = Instance.new("Frame")
+    sliderBar.Size = UDim2.new((default - min) / (max - min), 0, 1, 0)
+    sliderBar.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+    sliderBar.Parent = sliderFrame
+    CreateCorner(sliderBar)
+    
+    -- Drag logic here (omitted for brevity, implement UserInputService)
+    
+    if callback then
+        -- Update callback on change
+    end
+    
+    return sliderFrame
+end
+
+-- More components can be added: Dropdown, Toggle, ProgressBar, etc.
+
+return UILib
