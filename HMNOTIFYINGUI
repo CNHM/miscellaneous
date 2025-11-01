@@ -1,0 +1,209 @@
+-- Roblox 本地脚本通知 UI 库
+-- 将此脚本放置在 StarterPlayerScripts 或类似位置的 LocalScript 中
+
+local NotificationLib = {}
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- 如果不存在，创建 ScreenGui
+local screenGui = playerGui:FindFirstChild("NotificationGui")
+if not screenGui then
+    screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "NotificationGui"
+    screenGui.ResetOnSpawn = false
+    screenGui.Parent = playerGui
+end
+
+local notificationsFolder = screenGui:FindFirstChild("Notifications")
+if not notificationsFolder then
+    notificationsFolder = Instance.new("Folder")
+    notificationsFolder.Name = "Notifications"
+    notificationsFolder.Parent = screenGui
+end
+
+local activeNotifications = {}
+local spacing = 10  -- 通知间距
+local notificationWidth = 300
+local notificationHeight = 80
+local cornerRadius = UDim.new(0, 8)
+local slideDuration = 0.5
+local fadeDuration = 0.3
+
+-- 彩虹颜色序列，用于 UIGradient
+local function createRainbowGradient()
+    local colorSequence = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromHSV(0, 1, 1)),
+        ColorSequenceKeypoint.new(0.17, Color3.fromHSV(0.17, 1, 1)),
+        ColorSequenceKeypoint.new(0.33, Color3.fromHSV(0.33, 1, 1)),
+        ColorSequenceKeypoint.new(0.5, Color3.fromHSV(0.5, 1, 1)),
+        ColorSequenceKeypoint.new(0.66, Color3.fromHSV(0.66, 1, 1)),
+        ColorSequenceKeypoint.new(0.83, Color3.fromHSV(0.83, 1, 1)),
+        ColorSequenceKeypoint.new(1, Color3.fromHSV(1, 1, 1))
+    })
+    return colorSequence
+end
+
+-- 在 UIStroke 上动画彩虹流动效果
+local function animateRainbowStroke(stroke, gradient)
+    local tweenInfo = TweenInfo.new(2, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1, true)
+    local tween = TweenService:Create(gradient, tweenInfo, {Rotation = 360})
+    tween:Play()
+end
+
+-- 创建单个通知框架
+local function createNotification(params)
+    local title = params.title or "主标题"
+    local subtitle = params.subtitle or "副标题"
+    local duration = params.duration or 5
+    local position = params.position or "right"  -- "left" 或 "right"
+    local icon = params.icon  -- 字符串：rbxassetid 或 http URL
+
+    local isRight = position == "right"
+    local startX = isRight and UDim2.new(1, 0, 1, 0) or UDim2.new(-1, 0, 1, 0)
+    local targetX = isRight and UDim2.new(1, -notificationWidth - 20, 1, -notificationHeight - 20) or UDim2.new(0, 20, 1, -notificationHeight - 20)
+    local exitX = isRight and UDim2.new(1, 0, 1, 0) or UDim2.new(-1, 0, 1, 0)
+
+    -- 根据当前通知数量计算 Y 位置
+    local currentCount = #activeNotifications
+    local startY = UDim2.new(0, 0, 1, -notificationHeight - 20 - (currentCount * (notificationHeight + spacing)))
+    local targetY = startY
+
+    local frame = Instance.new("Frame")
+    frame.Name = "Notification"
+    frame.Size = UDim2.new(0, notificationWidth, 0, notificationHeight)
+    frame.Position = UDim2.new(startX.X.Scale, startX.X.Offset, startY.Y.Scale, startY.Y.Offset)
+    frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    frame.BorderSizePixel = 0
+    frame.Parent = notificationsFolder
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = cornerRadius
+    corner.Parent = frame
+
+    -- 边框带有彩虹流动效果
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.new(1, 1, 1)  -- 初始值，但会被渐变覆盖
+    stroke.Thickness = 2
+    stroke.Parent = frame
+
+    local gradient = Instance.new("UIGradient")
+    gradient.Color = createRainbowGradient()
+    gradient.Rotation = 0
+    gradient.Parent = stroke
+
+    animateRainbowStroke(stroke, gradient)
+
+    -- 图标
+    local iconLabel = nil
+    if icon then
+        iconLabel = Instance.new("ImageLabel")
+        iconLabel.Size = UDim2.new(0, 16, 0, 16)  -- 与主标题大小匹配的小图标
+        iconLabel.Position = UDim2.new(0, 10, 0.5, -8)
+        iconLabel.BackgroundTransparency = 1
+        iconLabel.Image = type(icon) == "number" and "rbxassetid://" .. tostring(icon) or icon
+        iconLabel.Parent = frame
+    end
+
+    -- 主标题（小字体）
+    local titleLabel = Instance.new("TextLabel")
+    titleLabel.Size = UDim2.new(1, -20, 0, 16)
+    titleLabel.Position = iconLabel and UDim2.new(0, 30, 0.5, -8) or UDim2.new(0, 10, 0.5, -8)
+    titleLabel.BackgroundTransparency = 1
+    titleLabel.Text = title
+    titleLabel.TextColor3 = Color3.new(1, 1, 1)
+    titleLabel.TextScaled = false
+    titleLabel.TextSize = 12
+    titleLabel.Font = Enum.Font.SourceSans
+    titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    titleLabel.Parent = frame
+
+    -- 副标题（大字体）
+    local subtitleLabel = Instance.new("TextLabel")
+    subtitleLabel.Size = UDim2.new(1, -20, 0, 20)
+    subtitleLabel.Position = UDim2.new(0, 10, 0.5, 8)
+    subtitleLabel.BackgroundTransparency = 1
+    subtitleLabel.Text = subtitle
+    subtitleLabel.TextColor3 = Color3.new(1, 1, 1)
+    subtitleLabel.TextScaled = false
+    subtitleLabel.TextSize = 16
+    subtitleLabel.Font = Enum.Font.SourceSansBold
+    subtitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    subtitleLabel.Parent = frame
+
+    -- 进度条
+    local progressFrame = Instance.new("Frame")
+    progressFrame.Size = UDim2.new(1, -20, 0, 4)
+    progressFrame.Position = UDim2.new(0, 10, 1, -10)
+    progressFrame.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    progressFrame.BorderSizePixel = 0
+    progressFrame.Parent = frame
+
+    local progressCorner = Instance.new("UICorner")
+    progressCorner.CornerRadius = UDim.new(0, 2)
+    progressCorner.Parent = progressFrame
+
+    local progressBar = Instance.new("Frame")
+    progressBar.Size = UDim2.new(1, 0, 1, 0)
+    progressBar.Position = UDim2.new(0, 0, 0, 0)
+    progressBar.BackgroundColor3 = Color3.fromRGB(100, 200, 100)
+    progressBar.BorderSizePixel = 0
+    progressBar.Parent = progressFrame
+
+    local progressCorner2 = Instance.new("UICorner")
+    progressCorner2.CornerRadius = UDim.new(0, 2)
+    progressCorner2.Parent = progressBar
+
+    -- 滑入动画
+    local slideInInfo = TweenInfo.new(slideDuration, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+    local slideInTween = TweenService:Create(frame, slideInInfo, {
+        Position = UDim2.new(targetX.X.Scale, targetX.X.Offset, targetY.Y.Scale, targetY.Y.Offset)
+    })
+    slideInTween:Play()
+
+    -- 进度条动画
+    local progressInfo = TweenInfo.new(duration, Enum.EasingStyle.Linear)
+    local progressTween = TweenService:Create(progressBar, progressInfo, {Size = UDim2.new(0, 0, 1, 0)})
+
+    -- 等待滑入完成，然后启动进度
+    slideInTween.Completed:Connect(function()
+        progressTween:Play()
+    end)
+
+    -- 持续时间后滑出
+    progressTween.Completed:Connect(function()
+        local slideOutInfo = TweenInfo.new(slideDuration, Enum.EasingStyle.Quart, Enum.EasingDirection.In)
+        local slideOutTween = TweenService:Create(frame, slideOutInfo, {
+            Position = UDim2.new(exitX.X.Scale, exitX.X.Offset, frame.Position.Y.Scale, frame.Position.Y.Offset)
+        })
+        slideOutTween:Play()
+
+        slideOutTween.Completed:Connect(function()
+            frame:Destroy()
+            -- 从活动列表中移除
+            for i, notif in ipairs(activeNotifications) do
+                if notif == frame then
+                    table.remove(activeNotifications, i)
+                    break
+                end
+            end
+        end)
+    end)
+
+    -- 添加到活动通知列表
+    table.insert(activeNotifications, frame)
+
+    -- 如果需要，更新后续通知的位置（但为了简单，它们保持堆叠）
+end
+
+-- 公共函数
+function NotificationLib.Show(params)
+    spawn(function()
+        createNotification(params)
+    end)
+end
+
+return NotificationLib
