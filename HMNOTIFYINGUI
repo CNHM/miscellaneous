@@ -1,6 +1,6 @@
--- Roblox 本地脚本通知 UI 库（无缝流光版）
+-- Roblox 本地脚本通知 UI 库（优化流光版）
 -- 将此脚本放置在 StarterPlayerScripts 或类似位置的 LocalScript 中
--- 更新：流光旋转逻辑改为RunService.Heartbeat连续更新（绝对无缝，无Tween间隔）；其他保持不变
+-- 更新：流光旋转优化为TweenService无限线性循环（RepeatCount=-1, EasingStyle=Linear），确保无缝持续转动、无缓动、无拉伸、无额外效果
 
 local NotificationLib = {}
 local TweenService = game:GetService("TweenService")
@@ -57,20 +57,11 @@ local function createRainbowGradient()
     return colorSequence
 end
 
--- 在 UIStroke 上动画彩虹流动效果（使用RunService无缝连续旋转）
+-- 在 UIStroke 上动画彩虹流动效果（Tween无限线性循环，无缝持续转动）
 local function animateRainbowStroke(gradient)
-    local startTime = tick()
-    local rotationSpeed = 120  -- 度/秒（3秒一圈，调整此值可改变速度）
-    local connection
-    connection = RunService.Heartbeat:Connect(function()
-        if gradient.Parent and gradient.Parent.Parent then  -- 检查gradient和stroke/frame存在
-            local elapsed = tick() - startTime
-            gradient.Rotation = (elapsed * rotationSpeed) % 360  -- 连续顺时针旋转，无缝循环
-        else
-            connection:Disconnect()  -- 自动清理
-        end
-    end)
-    return connection  -- 返回以便手动清理（可选）
+    local tweenInfo = TweenInfo.new(3, Enum.EasingStyle.Linear, Enum.EasingDirection.In, -1)  -- 3秒一圈，线性无缓动，无限重复
+    local tween = TweenService:Create(gradient, tweenInfo, {Rotation = 360})
+    tween:Play()
 end
 
 -- 创建单个通知框架
@@ -112,7 +103,7 @@ local function createNotification(params)
     gradient.Rotation = 0
     gradient.Parent = stroke
 
-    animateRainbowStroke(gradient)  -- 使用新逻辑启动无缝旋转
+    animateRainbowStroke(gradient)  -- 使用优化Tween启动无缝旋转
 
     -- 图标
     local iconLabel = nil
