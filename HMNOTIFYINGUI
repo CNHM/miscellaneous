@@ -1,14 +1,16 @@
--- Roblox 本地脚本通知 UI 库（优化流光版）
+-- Roblox 本地脚本通知 UI 库（添加UI检测版）
 -- 将此脚本放置在 StarterPlayerScripts 或类似位置的 LocalScript 中
--- 更新：流光旋转优化为TweenService无限线性循环（RepeatCount=-1, EasingStyle=Linear），确保无缝持续转动、无缓动、无拉伸、无额外效果
+-- 更新：添加屏幕UI检测（使用Camera.ViewportSize计算屏幕高度，确保堆叠不超出顶部）；activeNotifications中存储frame以检测位置；updatePositions中添加边界检查（如果总高度超过屏幕80%，从底部压缩间隔或限制显示）
 
 local NotificationLib = {}
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")  -- 可选，用于检测输入，但这里用于屏幕大小
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
+local camera = workspace.CurrentCamera
 
 -- 如果不存在，创建 ScreenGui
 local screenGui = playerGui:FindFirstChild("NotificationGui")
@@ -33,14 +35,33 @@ local notificationHeight = 80
 local cornerRadius = UDim.new(0, 8)
 local slideDuration = 0.5
 local fadeDuration = 0.3
+local maxScreenUsage = 0.8  -- 最大使用屏幕高度的80%
 
--- 更新所有活动通知的位置（从底部向上堆叠）
+-- 获取屏幕高度（可本地检测）
+local function getScreenHeight()
+    return camera.ViewportSize.Y
+end
+
+-- 更新所有活动通知的位置（从底部向上堆叠，添加边界检测）
 local function updatePositions()
+    local screenHeight = getScreenHeight()
+    local maxHeight = screenHeight * maxScreenUsage
+    local totalHeight = #activeNotifications * (notificationHeight + spacing) - spacing  -- 总高度
+    local adjustedSpacing = spacing  -- 默认间距
+
+    -- 如果总高度超过最大允许，压缩间距（最小1）
+    if totalHeight > maxHeight then
+        adjustedSpacing = math.max(1, (maxHeight - (#activeNotifications * notificationHeight)) / (#activeNotifications - 1))
+    end
+
     for i, frame in ipairs(activeNotifications) do
-        local yOffset = -notificationHeight - 20 - ((#activeNotifications - i) * (notificationHeight + spacing))
+        local yOffset = -notificationHeight - 20 - ((#activeNotifications - i) * (notificationHeight + adjustedSpacing))
         local targetPos = UDim2.new(frame.Position.X.Scale, frame.Position.X.Offset, 1, yOffset)
         TweenService:Create(frame, TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Position = targetPos}):Play()
     end
+
+    -- 可本地检测：打印或返回当前UI状态（用于调试/检测）
+    print("检测UI状态: 活动通知数=" .. #activeNotifications .. ", 总高度=" .. totalHeight .. ", 屏幕高度=" .. screenHeight .. ", 调整间距=" .. adjustedSpacing)
 end
 
 -- 彩虹颜色序列，用于 UIGradient
@@ -57,11 +78,27 @@ local function createRainbowGradient()
     return colorSequence
 end
 
--- 在 UIStroke 上动画彩虹流动效果（Tween无限线性循环，无缝持续转动）
+-- 在 UIStroke 上动画彩虹流动效果（RenderStepped手动每帧更新，无中断、无变形）
 local function animateRainbowStroke(gradient)
-    local tweenInfo = TweenInfo.new(3, Enum.EasingStyle.Linear, Enum.EasingDirection.In, -1)  -- 3秒一圈，线性无缓动，无限重复
-    local tween = TweenService:Create(gradient, tweenInfo, {Rotation = 360})
-    tween:Play()
+    local startTime = tick()
+    local rotationSpeed = 120  -- 度/秒（3秒一圈，顺时针）
+    local connection
+    connection = RunService.RenderStepped:Connect(function()
+        if gradient and gradient.Parent and gradient.Parent.Parent then  -- 检查存在
+            local elapsed = tick() - startTime
+            gradient.Rotation = (elapsed * rotationSpeed) % 360  -- 连续计算，%360无缝循环
+        else
+            connection:Disconnect()  -- 自动清理
+        end
+    end)
+    -- 绑定到frame销毁
+    gradient.Parent.Parent.AncestryChanged:Connect(function()
+        if not gradient.Parent then
+            if connection then
+                connection:Disconnect()
+            end
+        end
+    end)
 end
 
 -- 创建单个通知框架
@@ -88,6 +125,10 @@ local function createNotification(params)
     frame.BorderSizePixel = 0
     frame.Parent = notificationsFolder
 
+    -- 添加检测属性（可本地检测UI状态）
+    frame:SetAttribute("NotificationIndex", #activeNotifications + 1)
+    frame:SetAttribute("ScreenHeightDetected", getScreenHeight())
+
     local corner = Instance.new("UICorner")
     corner.CornerRadius = cornerRadius
     corner.Parent = frame
@@ -103,7 +144,7 @@ local function createNotification(params)
     gradient.Rotation = 0
     gradient.Parent = stroke
 
-    animateRainbowStroke(gradient)  -- 使用优化Tween启动无缝旋转
+    animateRainbowStroke(gradient)  -- 使用优化手动更新启动无缝旋转
 
     -- 图标
     local iconLabel = nil
@@ -209,7 +250,7 @@ local function createNotification(params)
         progressTween:Play()
         -- 添加到列表并更新所有位置（堆叠）
         table.insert(activeNotifications, frame)
-        updatePositions()  -- 关键：添加后立即更新堆叠
+        updatePositions()  -- 关键：添加后立即更新堆叠（含检测）
     end)
 
     -- 持续时间后滑出
@@ -230,7 +271,7 @@ local function createNotification(params)
                     break
                 end
             end
-            updatePositions()  -- 移除后更新剩余位置
+            updatePositions()  -- 移除后更新剩余位置（含检测）
         end)
     end)
 end
@@ -240,6 +281,16 @@ function NotificationLib.Show(params)
     spawn(function()
         createNotification(params)
     end)
+end
+
+-- 新增：公共检测函数（可本地调用检测UI状态）
+function NotificationLib.DetectUI()
+    updatePositions()  -- 强制更新并打印检测
+    return {
+        activeCount = #activeNotifications,
+        screenHeight = getScreenHeight(),
+        totalHeight = #activeNotifications * (notificationHeight + spacing) - spacing
+    }
 end
 
 return NotificationLib
