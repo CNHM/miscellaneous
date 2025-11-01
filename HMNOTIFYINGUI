@@ -1,6 +1,6 @@
--- Roblox 本地脚本通知 UI 库（去除阴影版）
+-- Roblox 本地脚本通知 UI 库（修复堆叠版）
 -- 将此脚本放置在 StarterPlayerScripts 或类似位置的 LocalScript 中
--- 更新：去除阴影代码（修复报错）；进度条从左到右填充；添加剩余秒数显示；主标题字体增大（14）；流光顺时针单向循环
+-- 更新：修复多个通知重叠（添加updatePositions函数，确保垂直堆叠有间隔）；主标题移到左上角（有图标右靠，宽度限制，字体大小保持14）
 
 local NotificationLib = {}
 local TweenService = game:GetService("TweenService")
@@ -33,6 +33,15 @@ local notificationHeight = 80
 local cornerRadius = UDim.new(0, 8)
 local slideDuration = 0.5
 local fadeDuration = 0.3
+
+-- 更新所有活动通知的位置（从底部向上堆叠）
+local function updatePositions()
+    for i, frame in ipairs(activeNotifications) do
+        local yOffset = -notificationHeight - 20 - ((#activeNotifications - i) * (notificationHeight + spacing))
+        local targetPos = UDim2.new(frame.Position.X.Scale, frame.Position.X.Offset, 1, yOffset)
+        TweenService:Create(frame, TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Position = targetPos}):Play()
+    end
+end
 
 -- 彩虹颜色序列，用于 UIGradient
 local function createRainbowGradient()
@@ -68,10 +77,8 @@ local function createNotification(params)
     local targetX = isRight and UDim2.new(1, -notificationWidth - 20, 1, -notificationHeight - 20) or UDim2.new(0, 20, 1, -notificationHeight - 20)
     local exitX = isRight and UDim2.new(1, 0, 1, 0) or UDim2.new(-1, 0, 1, 0)
 
-    -- 根据当前通知数量计算 Y 位置
-    local currentCount = #activeNotifications
-    local startY = UDim2.new(0, 0, 1, -notificationHeight - 20 - (currentCount * (notificationHeight + spacing)))
-    local targetY = startY
+    -- 初始Y位置（临时底部，避免重叠）
+    local startY = UDim2.new(0, 0, 1, -notificationHeight - 20)
 
     local frame = Instance.new("Frame")
     frame.Name = "Notification"
@@ -103,29 +110,30 @@ local function createNotification(params)
     if icon then
         iconLabel = Instance.new("ImageLabel")
         iconLabel.Size = UDim2.new(0, 16, 0, 16)  -- 与主标题大小匹配的小图标
-        iconLabel.Position = UDim2.new(0, 10, 0.5, -8)
+        iconLabel.Position = UDim2.new(0, 10, 0, 5)  -- 左上角图标
         iconLabel.BackgroundTransparency = 1
         iconLabel.Image = type(icon) == "number" and "rbxassetid://" .. tostring(icon) or icon
         iconLabel.Parent = frame
     end
 
-    -- 主标题（增大字体到14）
+    -- 主标题（移到左上角，宽度限制，字体大小保持14）
     local titleLabel = Instance.new("TextLabel")
-    titleLabel.Size = UDim2.new(1, -20, 0, 18)  -- 稍高以适应更大字体
-    titleLabel.Position = iconLabel and UDim2.new(0, 30, 0.5, -9) or UDim2.new(0, 10, 0.5, -9)
+    titleLabel.Size = UDim2.new(0, 240, 0, 18)  -- 宽度限制到240，避免过宽
+    titleLabel.Position = iconLabel and UDim2.new(0, 30, 0, 5) or UDim2.new(0, 10, 0, 5)  -- 左上角，有图标右靠
     titleLabel.BackgroundTransparency = 1
     titleLabel.Text = title
     titleLabel.TextColor3 = Color3.new(1, 1, 1)
     titleLabel.TextScaled = false
-    titleLabel.TextSize = 14  -- 增大
+    titleLabel.TextSize = 14  -- 保持
     titleLabel.Font = Enum.Font.SourceSansBold  -- 加粗以突出
     titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    titleLabel.TextTruncate = Enum.TextTruncate.AtEnd  -- 过长截断
     titleLabel.Parent = frame
 
-    -- 副标题（大字体，保持16）
+    -- 副标题（调整到主标题下方）
     local subtitleLabel = Instance.new("TextLabel")
     subtitleLabel.Size = UDim2.new(1, -20, 0, 20)
-    subtitleLabel.Position = UDim2.new(0, 10, 0.5, 9)
+    subtitleLabel.Position = UDim2.new(0, 10, 0, 25)  -- 下移到主标题下方
     subtitleLabel.BackgroundTransparency = 1
     subtitleLabel.Text = subtitle
     subtitleLabel.TextColor3 = Color3.new(1, 1, 1)
@@ -133,6 +141,7 @@ local function createNotification(params)
     subtitleLabel.TextSize = 16
     subtitleLabel.Font = Enum.Font.SourceSansBold
     subtitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    subtitleLabel.TextTruncate = Enum.TextTruncate.AtEnd
     subtitleLabel.Parent = frame
 
     -- 进度条（从左到右填充）
@@ -170,10 +179,10 @@ local function createNotification(params)
     timerLabel.TextXAlignment = Enum.TextXAlignment.Right
     timerLabel.Parent = frame
 
-    -- 滑入动画
+    -- 滑入动画（初始从边缘滑入，Y临时底部）
     local slideInInfo = TweenInfo.new(slideDuration, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
     local slideInTween = TweenService:Create(frame, slideInInfo, {
-        Position = UDim2.new(targetX.X.Scale, targetX.X.Offset, targetY.Y.Scale, targetY.Y.Offset)
+        Position = UDim2.new(targetX.X.Scale, targetX.X.Offset, 1, -notificationHeight - 20)  -- 先滑入临时Y
     })
     slideInTween:Play()
 
@@ -194,10 +203,13 @@ local function createNotification(params)
         end
     end)
 
-    -- 等待滑入完成，然后启动进度
+    -- 等待滑入完成，然后启动进度并更新位置
     slideInTween.Completed:Connect(function()
         startTime = tick()  -- 重置计时器，确保从滑入后开始
         progressTween:Play()
+        -- 添加到列表并更新所有位置（堆叠）
+        table.insert(activeNotifications, frame)
+        updatePositions()  -- 关键：添加后立即更新堆叠
     end)
 
     -- 持续时间后滑出
@@ -211,18 +223,16 @@ local function createNotification(params)
 
         slideOutTween.Completed:Connect(function()
             frame:Destroy()
-            -- 从活动列表中移除
+            -- 从活动列表中移除并更新位置
             for i, notif in ipairs(activeNotifications) do
                 if notif == frame then
                     table.remove(activeNotifications, i)
                     break
                 end
             end
+            updatePositions()  -- 移除后更新剩余位置
         end)
     end)
-
-    -- 添加到活动通知列表
-    table.insert(activeNotifications, frame)
 end
 
 -- 公共函数
