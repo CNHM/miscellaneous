@@ -35,13 +35,13 @@ local function updatePositions()
 	local maxHeight = screenHeight * maxScreenUsage
 	local totalHeight = #activeNotifications * (notificationHeight + spacing) - spacing
 	local adjustedSpacing = spacing
-	if totalHeight > maxHeight then
+	if totalHeight > maxHeight and #activeNotifications > 1 then
 		adjustedSpacing = math.max(1, (maxHeight - (#activeNotifications * notificationHeight)) / (#activeNotifications - 1))
 	end
 	for i, frame in ipairs(activeNotifications) do
 		local yOffset = -notificationHeight - 20 - ((#activeNotifications - i) * (notificationHeight + adjustedSpacing))
-		local targetPos = UDim2.new(0.5, -notificationWidth / 2, 1, yOffset)
-		TweenService:Create(frame, TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Position = targetPos}):Play()
+		local targetPos = UDim2.new(frame.Position.X.Scale, frame.Position.X.Offset, 1, yOffset)
+		TweenService:Create(frame, TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Position = targetPos}):Play()
 	end
 end
 
@@ -61,8 +61,8 @@ local rainbowGradients = {}
 local rotationSpeed = 120
 
 RunService.RenderStepped:Connect(function(dt)
-	for gradient, _ in pairs(rainbowGradients) do
-		if gradient and gradient.Parent and gradient.Parent.Parent then
+	for gradient, alive in pairs(rainbowGradients) do
+		if alive and gradient and gradient.Parent and gradient.Parent.Parent then
 			gradient.Rotation = (gradient.Rotation + rotationSpeed * dt) % 360
 		else
 			rainbowGradients[gradient] = nil
@@ -70,25 +70,31 @@ RunService.RenderStepped:Connect(function(dt)
 	end
 end)
 
-local function animateRainbowStroke(gradient)
-	rainbowGradients[gradient] = true
+local function registerGradient(gradient)
+	if gradient and gradient.Parent then
+		local initial = math.random() * 360
+		gradient.Rotation = initial
+		rainbowGradients[gradient] = true
+	end
 end
 
 local function createNotification(params)
 	local title = params.title or "主标题"
 	local subtitle = params.subtitle or "副标题"
 	local duration = params.duration or 5
+	local position = params.position or "right"
 	local icon = params.icon
 	local soundId = params.soundId or defaultSoundId
+	local isRight = position == "right"
 
-	local startPos = UDim2.new(1, 20, 1, -notificationHeight - 20)
-	local targetPos = UDim2.new(0.5, -notificationWidth / 2, 1, -notificationHeight - 20)
-	local exitPos = UDim2.new(-0.5, -notificationWidth, 1, -notificationHeight - 20)
+	local startX = isRight and UDim2.new(1, 20, 1, -notificationHeight - 20) or UDim2.new(0, -notificationWidth - 20, 1, -notificationHeight - 20)
+	local targetX = isRight and UDim2.new(1, -notificationWidth - 20, 1, -notificationHeight - 20) or UDim2.new(0, 20, 1, -notificationHeight - 20)
+	local exitX = isRight and UDim2.new(1, 20, 1, -notificationHeight - 20) or UDim2.new(0, -notificationWidth - 20, 1, -notificationHeight - 20)
 
 	local frame = Instance.new("Frame")
 	frame.Name = "Notification"
 	frame.Size = UDim2.new(0, notificationWidth, 0, notificationHeight)
-	frame.Position = startPos
+	frame.Position = startX
 	frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 	frame.BorderSizePixel = 0
 	frame.BackgroundTransparency = 1
@@ -105,9 +111,8 @@ local function createNotification(params)
 
 	local gradient = Instance.new("UIGradient")
 	gradient.Color = createRainbowGradient()
-	gradient.Rotation = 0
 	gradient.Parent = stroke
-	animateRainbowStroke(gradient)
+	registerGradient(gradient)
 
 	local notificationSound = Instance.new("Sound")
 	notificationSound.SoundId = soundId
@@ -174,7 +179,7 @@ local function createNotification(params)
 	timerLabel.Parent = frame
 
 	local fadeInTween = TweenService:Create(frame, TweenInfo.new(fadeDuration), {BackgroundTransparency = 0})
-	local slideInTween = TweenService:Create(frame, TweenInfo.new(slideDuration, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Position = targetPos})
+	local slideInTween = TweenService:Create(frame, TweenInfo.new(slideDuration, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Position = targetX})
 	fadeInTween:Play()
 	slideInTween:Play()
 
@@ -201,7 +206,7 @@ local function createNotification(params)
 	progressTween.Completed:Connect(function()
 		if timerConn then timerConn:Disconnect() end
 		local fadeOutTween = TweenService:Create(frame, TweenInfo.new(fadeDuration), {BackgroundTransparency = 1})
-		local slideOutTween = TweenService:Create(frame, TweenInfo.new(slideDuration, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {Position = exitPos})
+		local slideOutTween = TweenService:Create(frame, TweenInfo.new(slideDuration, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {Position = exitX})
 		fadeOutTween:Play()
 		slideOutTween:Play()
 		slideOutTween.Completed:Connect(function()
