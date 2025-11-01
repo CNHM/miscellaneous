@@ -1,11 +1,12 @@
--- Roblox 本地脚本通知 UI 库（添加UI检测版）
+-- Roblox 本地脚本通知 UI 库（添加音效支持版）
 -- 将此脚本放置在 StarterPlayerScripts 或类似位置的 LocalScript 中
--- 更新：添加屏幕UI检测（使用Camera.ViewportSize计算屏幕高度，确保堆叠不超出顶部）；activeNotifications中存储frame以检测位置；updatePositions中添加边界检查（如果总高度超过屏幕80%，从底部压缩间隔或限制显示）
+-- 更新：增加通知音效支持（默认ID: 18595195017）；在滑入后播放；支持自定义soundId参数；新增公共PlaySound函数（本地调用音效）
 
 local NotificationLib = {}
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
+local SoundService = game:GetService("SoundService")
 local UserInputService = game:GetService("UserInputService")  -- 可选，用于检测输入，但这里用于屏幕大小
 
 local player = Players.LocalPlayer
@@ -36,6 +37,7 @@ local cornerRadius = UDim.new(0, 8)
 local slideDuration = 0.5
 local fadeDuration = 0.3
 local maxScreenUsage = 0.8  -- 最大使用屏幕高度的80%
+local defaultSoundId = "rbxassetid://18595195017"  -- 默认通知音效ID（从搜索获取）
 
 -- 获取屏幕高度（可本地检测）
 local function getScreenHeight()
@@ -108,6 +110,7 @@ local function createNotification(params)
     local duration = params.duration or 5
     local position = params.position or "right"  -- "left" 或 "right"
     local icon = params.icon  -- 字符串：rbxassetid 或 http URL
+    local soundId = params.soundId or defaultSoundId  -- 支持自定义音效ID
 
     local isRight = position == "right"
     local startX = isRight and UDim2.new(1, 0, 1, 0) or UDim2.new(-1, 0, 1, 0)
@@ -145,6 +148,12 @@ local function createNotification(params)
     gradient.Parent = stroke
 
     animateRainbowStroke(gradient)  -- 使用优化手动更新启动无缝旋转
+
+    -- 通知音效
+    local notificationSound = Instance.new("Sound")
+    notificationSound.SoundId = soundId
+    notificationSound.Volume = 0.5  -- 音量可调
+    notificationSound.Parent = frame
 
     -- 图标
     local iconLabel = nil
@@ -244,10 +253,11 @@ local function createNotification(params)
         end
     end)
 
-    -- 等待滑入完成，然后启动进度并更新位置
+    -- 等待滑入完成，然后启动进度、播放音效并更新位置
     slideInTween.Completed:Connect(function()
         startTime = tick()  -- 重置计时器，确保从滑入后开始
         progressTween:Play()
+        notificationSound:Play()  -- 播放通知音效
         -- 添加到列表并更新所有位置（堆叠）
         table.insert(activeNotifications, frame)
         updatePositions()  -- 关键：添加后立即更新堆叠（含检测）
@@ -291,6 +301,18 @@ function NotificationLib.DetectUI()
         screenHeight = getScreenHeight(),
         totalHeight = #activeNotifications * (notificationHeight + spacing) - spacing
     }
+end
+
+-- 新增：本地调用通知音效（支持自定义ID）
+function NotificationLib.PlaySound(soundId)
+    local sound = Instance.new("Sound")
+    sound.SoundId = soundId or defaultSoundId
+    sound.Volume = 0.5
+    sound.Parent = SoundService
+    sound:Play()
+    sound.Ended:Connect(function()
+        sound:Destroy()
+    end)
 end
 
 return NotificationLib
