@@ -1,5 +1,6 @@
--- Roblox 本地脚本通知 UI 库
+-- Roblox 本地脚本通知 UI 库（更新版）
 -- 将此脚本放置在 StarterPlayerScripts 或类似位置的 LocalScript 中
+-- 更新：进度条从左到右填充；添加剩余秒数显示；主标题字体增大（14）；流光顺时针单向循环；添加彩色边框阴影效果
 
 local NotificationLib = {}
 local TweenService = game:GetService("TweenService")
@@ -47,9 +48,9 @@ local function createRainbowGradient()
     return colorSequence
 end
 
--- 在 UIStroke 上动画彩虹流动效果
+-- 在 UIStroke 上动画彩虹流动效果（顺时针单向循环）
 local function animateRainbowStroke(stroke, gradient)
-    local tweenInfo = TweenInfo.new(2, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1, true)
+    local tweenInfo = TweenInfo.new(3, Enum.EasingStyle.Linear, Enum.EasingDirection.In, -1, false)  -- 单向循环，无反转
     local tween = TweenService:Create(gradient, tweenInfo, {Rotation = 360})
     tween:Play()
 end
@@ -71,6 +72,38 @@ local function createNotification(params)
     local currentCount = #activeNotifications
     local startY = UDim2.new(0, 0, 1, -notificationHeight - 20 - (currentCount * (notificationHeight + spacing)))
     local targetY = startY
+
+    -- 阴影框架（彩色边框对应的光影效果）
+    local shadowFrame = Instance.new("Frame")
+    shadowFrame.Name = "Shadow"
+    shadowFrame.Size = UDim2.new(0, notificationWidth + 4, 0, notificationHeight + 4)  -- 略大以模拟阴影
+    shadowFrame.Position = UDim2.new(startX.X.Scale, startX.X.Offset - 2, startY.Y.Scale, startY.Y.Offset - 2)  -- 偏移位置
+    shadowFrame.BackgroundTransparency = 1
+    shadowFrame.BorderSizePixel = 0
+    shadowFrame.ZIndex = frame.ZIndex - 1  -- 阴影在后
+    shadowFrame.Parent = notificationsFolder
+
+    local shadowCorner = Instance.new("UICorner")
+    shadowCorner.CornerRadius = UDim.new(0, 10)  -- 稍大圆角
+    shadowCorner.Parent = shadowFrame
+
+    -- 阴影渐变（模糊彩虹效果，使用半透明）
+    local shadowStroke = Instance.new("UIStroke")
+    shadowStroke.Color = Color3.new(0, 0, 0)  -- 基础黑，但用渐变模拟彩色光影
+    shadowStroke.Thickness = 4
+    shadowStroke.Transparency = 0.7  -- 半透明
+    shadowStroke.Parent = shadowFrame
+
+    local shadowGradient = Instance.new("UIGradient")
+    shadowGradient.Color = createRainbowGradient()  -- 同彩虹，但透明化
+    shadowGradient.Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 0.5),
+        NumberSequenceKeypoint.new(1, 0.8)
+    })
+    shadowGradient.Rotation = 0
+    shadowGradient.Parent = shadowStroke
+
+    animateRainbowStroke(shadowStroke, shadowGradient)  -- 同步动画阴影
 
     local frame = Instance.new("Frame")
     frame.Name = "Notification"
@@ -108,23 +141,23 @@ local function createNotification(params)
         iconLabel.Parent = frame
     end
 
-    -- 主标题（小字体）
+    -- 主标题（增大字体到14）
     local titleLabel = Instance.new("TextLabel")
-    titleLabel.Size = UDim2.new(1, -20, 0, 16)
-    titleLabel.Position = iconLabel and UDim2.new(0, 30, 0.5, -8) or UDim2.new(0, 10, 0.5, -8)
+    titleLabel.Size = UDim2.new(1, -20, 0, 18)  -- 稍高以适应更大字体
+    titleLabel.Position = iconLabel and UDim2.new(0, 30, 0.5, -9) or UDim2.new(0, 10, 0.5, -9)
     titleLabel.BackgroundTransparency = 1
     titleLabel.Text = title
     titleLabel.TextColor3 = Color3.new(1, 1, 1)
     titleLabel.TextScaled = false
-    titleLabel.TextSize = 12
-    titleLabel.Font = Enum.Font.SourceSans
+    titleLabel.TextSize = 14  -- 增大
+    titleLabel.Font = Enum.Font.SourceSansBold  -- 加粗以突出
     titleLabel.TextXAlignment = Enum.TextXAlignment.Left
     titleLabel.Parent = frame
 
-    -- 副标题（大字体）
+    -- 副标题（大字体，保持16）
     local subtitleLabel = Instance.new("TextLabel")
     subtitleLabel.Size = UDim2.new(1, -20, 0, 20)
-    subtitleLabel.Position = UDim2.new(0, 10, 0.5, 8)
+    subtitleLabel.Position = UDim2.new(0, 10, 0.5, 9)
     subtitleLabel.BackgroundTransparency = 1
     subtitleLabel.Text = subtitle
     subtitleLabel.TextColor3 = Color3.new(1, 1, 1)
@@ -134,7 +167,7 @@ local function createNotification(params)
     subtitleLabel.TextXAlignment = Enum.TextXAlignment.Left
     subtitleLabel.Parent = frame
 
-    -- 进度条
+    -- 进度条（从左到右填充）
     local progressFrame = Instance.new("Frame")
     progressFrame.Size = UDim2.new(1, -20, 0, 4)
     progressFrame.Position = UDim2.new(0, 10, 1, -10)
@@ -147,7 +180,7 @@ local function createNotification(params)
     progressCorner.Parent = progressFrame
 
     local progressBar = Instance.new("Frame")
-    progressBar.Size = UDim2.new(1, 0, 1, 0)
+    progressBar.Size = UDim2.new(0, 0, 1, 0)  -- 从0宽度开始
     progressBar.Position = UDim2.new(0, 0, 0, 0)
     progressBar.BackgroundColor3 = Color3.fromRGB(100, 200, 100)
     progressBar.BorderSizePixel = 0
@@ -157,6 +190,18 @@ local function createNotification(params)
     progressCorner2.CornerRadius = UDim.new(0, 2)
     progressCorner2.Parent = progressBar
 
+    -- 剩余秒数/百分比显示（可选：这里显示剩余秒数，可改成百分比）
+    local timerLabel = Instance.new("TextLabel")
+    timerLabel.Size = UDim2.new(0, 50, 0, 20)
+    timerLabel.Position = UDim2.new(1, -60, 0.5, -10)  -- 右上角显示
+    timerLabel.BackgroundTransparency = 1
+    timerLabel.Text = tostring(duration) .. "秒"
+    timerLabel.TextColor3 = Color3.new(1, 1, 1)
+    timerLabel.TextScaled = true
+    timerLabel.Font = Enum.Font.SourceSans
+    timerLabel.TextXAlignment = Enum.TextXAlignment.Right
+    timerLabel.Parent = frame
+
     -- 滑入动画
     local slideInInfo = TweenInfo.new(slideDuration, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
     local slideInTween = TweenService:Create(frame, slideInInfo, {
@@ -164,9 +209,28 @@ local function createNotification(params)
     })
     slideInTween:Play()
 
-    -- 进度条动画
+    -- 阴影同步滑入
+    local shadowSlideInTween = TweenService:Create(shadowFrame, slideInInfo, {
+        Position = UDim2.new(targetX.X.Scale, targetX.X.Offset - 2, targetY.Y.Scale, targetY.Y.Offset - 2)
+    })
+    shadowSlideInTween:Play()
+
+    -- 进度条动画（从0到1宽度，从左到右）
     local progressInfo = TweenInfo.new(duration, Enum.EasingStyle.Linear)
-    local progressTween = TweenService:Create(progressBar, progressInfo, {Size = UDim2.new(0, 0, 1, 0)})
+    local progressTween = TweenService:Create(progressBar, progressInfo, {Size = UDim2.new(1, 0, 1, 0)})  -- 到满宽度
+
+    -- 倒计时更新（剩余秒数）
+    local remainingTime = duration
+    local timerConnection
+    timerConnection = RunService.Heartbeat:Connect(function()
+        local elapsed = tick() - progressTween.PlaybackState == Enum.PlaybackState.Playing and (progressTween.PlaybackTime or 0) or 0
+        remainingTime = math.max(0, duration - elapsed)
+        timerLabel.Text = math.floor(remainingTime + 0.5) .. "秒"  -- 四舍五入显示
+
+        if remainingTime <= 0 then
+            timerConnection:Disconnect()
+        end
+    end)
 
     -- 等待滑入完成，然后启动进度
     slideInTween.Completed:Connect(function()
@@ -175,14 +239,22 @@ local function createNotification(params)
 
     -- 持续时间后滑出
     progressTween.Completed:Connect(function()
+        timerConnection:Disconnect()
         local slideOutInfo = TweenInfo.new(slideDuration, Enum.EasingStyle.Quart, Enum.EasingDirection.In)
         local slideOutTween = TweenService:Create(frame, slideOutInfo, {
             Position = UDim2.new(exitX.X.Scale, exitX.X.Offset, frame.Position.Y.Scale, frame.Position.Y.Offset)
         })
         slideOutTween:Play()
 
+        -- 阴影同步滑出
+        local shadowSlideOutTween = TweenService:Create(shadowFrame, slideOutInfo, {
+            Position = UDim2.new(exitX.X.Scale, exitX.X.Offset - 2, frame.Position.Y.Scale, frame.Position.Y.Offset - 2)
+        })
+        shadowSlideOutTween:Play()
+
         slideOutTween.Completed:Connect(function()
             frame:Destroy()
+            shadowFrame:Destroy()
             -- 从活动列表中移除
             for i, notif in ipairs(activeNotifications) do
                 if notif == frame then
@@ -195,8 +267,6 @@ local function createNotification(params)
 
     -- 添加到活动通知列表
     table.insert(activeNotifications, frame)
-
-    -- 如果需要，更新后续通知的位置（但为了简单，它们保持堆叠）
 end
 
 -- 公共函数
