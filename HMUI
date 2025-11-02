@@ -1,1 +1,431 @@
+-- BeautifulUI 库 (BUI)
+-- 一个 Roblox 本地玩家 UI 库，带有动画、圆角和基本组件。
+-- 结构：左侧标签栏，右侧内容面板。
+-- 仅通过标题栏拖动。
+-- 额外：切换 UI 按钮和锁定/解锁按钮（两个可拖动的圆角额外按钮）。
+-- 新增：集成通知系统，使用外部通知库。
+-- 将此作为 ModuleScript 上传到 GitHub 以供 Roblox 使用。
 
+-- 使用方法：
+-- local BUI = require(路径到.BUI)
+-- local ui = BUI.CreateUI("我的 UI", Vector2.new(400, 300))
+-- local tab1 = ui:AddTab("标签 1")
+-- tab1:AddButton("点击我", function() print("已点击") end)
+-- tab1:AddButton("显示通知", function() ui:ShowNotification({title = "测试", subtitle = "这是一条通知"}) end)
+-- ui:Show()
+
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- 加载通知库
+local NotificationLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/CNHM/miscellaneous/main/Notifying"))()
+
+local BUI = {}
+BUI.__index = BUI
+
+-- 动画信息
+local ANIM_INFO = TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+local HOVER_SCALE = UDim2.new(1.05, 0, 1.05, 0)
+local DEFAULT_SCALE = UDim2.new(1, 0, 1, 0)
+
+-- 颜色主题（可自定义）
+local THEME = {
+    Primary = Color3.fromRGB(45, 45, 50),
+    Secondary = Color3.fromRGB(60, 60, 65),
+    Accent = Color3.fromRGB(100, 150, 255),
+    Text = Color3.fromRGB(255, 255, 255),
+    Background = Color3.fromRGB(30, 30, 35),
+    Hover = Color3.fromRGB(70, 70, 75)
+}
+
+-- 实用函数：创建圆角框架
+local function createRoundedFrame(parent, size, position, color)
+    local frame = Instance.new("Frame")
+    frame.Size = size or UDim2.new(0, 0, 0, 0)
+    frame.Position = position or UDim2.new(0, 0, 0, 0)
+    frame.BackgroundColor3 = color or THEME.Primary
+    frame.BorderSizePixel = 0
+    frame.Parent = parent
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = frame
+    
+    return frame
+end
+
+-- 实用函数：动画框架
+local function animateFrame(frame, targetProps, info)
+    info = info or ANIM_INFO
+    local tween = TweenService:Create(frame, info, targetProps)
+    tween:Play()
+    return tween
+end
+
+-- 按钮组件
+local function createButton(parent, text, callback, size)
+    local button = createRoundedFrame(parent, size or UDim2.new(1, -10, 0, 30), UDim2.new(0, 5, 0, 5))
+    button.BackgroundColor3 = THEME.Secondary
+    
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.Position = UDim2.new(0, 0, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = THEME.Text
+    label.TextScaled = true
+    label.Font = Enum.Font.GothamBold
+    label.Parent = button
+    
+    -- 动画效果
+    local hoverTween = animateFrame(button, {Size = HOVER_SCALE * button.Size})
+    local defaultTween = animateFrame(button, {Size = DEFAULT_SCALE * button.Size})
+    
+    button.MouseEnter:Connect(function()
+        hoverTween:Play()
+        animateFrame(button, {BackgroundColor3 = THEME.Hover})
+    end)
+    
+    button.MouseLeave:Connect(function()
+        defaultTween:Play()
+        animateFrame(button, {BackgroundColor3 = THEME.Secondary})
+    end)
+    
+    button.MouseButton1Click:Connect(function()
+        animateFrame(button, {Size = DEFAULT_SCALE * button.Size * 0.95}, TweenInfo.new(0.1))
+        wait(0.1)
+        animateFrame(button, {Size = DEFAULT_SCALE * button.Size})
+        callback()
+    end)
+    
+    return button
+end
+
+-- 开关（切换）组件
+local function createToggle(parent, text, defaultState, callback, size)
+    local container = createRoundedFrame(parent, size or UDim2.new(1, -10, 0, 40), UDim2.new(0, 5, 0, 5))
+    container.BackgroundTransparency = 1
+    
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(0.7, 0, 1, 0)
+    label.Position = UDim2.new(0, 0, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = THEME.Text
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.TextScaled = true
+    label.Font = Enum.Font.Gotham
+    label.Parent = container
+    
+    local switch = createRoundedFrame(container, UDim2.new(0, 40, 0, 20), UDim2.new(1, -45, 0.25, 0))
+    switch.BackgroundColor3 = defaultState and THEME.Accent or THEME.Secondary
+    
+    local knob = createRoundedFrame(switch, UDim2.new(0, 16, 0, 16), UDim2.new(0, 2, 0.5, -8))
+    knob.BackgroundColor3 = THEME.Text
+    local knobTween = TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+    
+    local state = defaultState
+    local function toggle()
+        state = not state
+        animateFrame(switch, {BackgroundColor3 = state and THEME.Accent or THEME.Secondary})
+        animateFrame(knob, {Position = state and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)}, knobTween)
+        callback(state)
+    end
+    
+    switch.MouseButton1Click:Connect(toggle)
+    
+    return container, toggle
+end
+
+-- 滑块组件（基础）
+local function createSlider(parent, text, min, max, default, callback, size)
+    local container = createRoundedFrame(parent, size or UDim2.new(1, -10, 0, 50), UDim2.new(0, 5, 0, 5))
+    container.BackgroundTransparency = 1
+    
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 0.4, 0)
+    label.Position = UDim2.new(0, 0, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = text .. ": " .. default
+    label.TextColor3 = THEME.Text
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.TextScaled = true
+    label.Font = Enum.Font.Gotham
+    label.Parent = container
+    
+    local track = createRoundedFrame(container, UDim2.new(1, 0, 0.2, 0), UDim2.new(0, 0, 0.6, 0))
+    track.BackgroundColor3 = THEME.Secondary
+    
+    local fill = createRoundedFrame(track, UDim2.new((default - min) / (max - min), 0, 1, 0), UDim2.new(0, 0, 0, 0))
+    fill.BackgroundColor3 = THEME.Accent
+    
+    local thumb = createRoundedFrame(track, UDim2.new(0, 10, 1, 0), UDim2.new((default - min) / (max - min), -5, 0, -5))
+    thumb.BackgroundColor3 = THEME.Text
+    
+    local dragging = false
+    local function update(value)
+        local ratio = math.clamp((value - min) / (max - min), 0, 1)
+        fill.Size = UDim2.new(ratio, 0, 1, 0)
+        thumb.Position = UDim2.new(ratio, -5, 0, -5)
+        label.Text = text .. ": " .. math.floor(value)
+        callback(value)
+    end
+    
+    track.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+        end
+    end)
+    
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+    
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local mouse = playerGui:GetMouse()
+            local ratio = math.clamp((mouse.X - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
+            local value = min + ratio * (max - min)
+            update(value)
+        end
+    end)
+    
+    update(default)
+    return container
+end
+
+-- 标签面板组件
+local function createTabPanel(parent)
+    local tabs = {}
+    local currentTab = nil
+    
+    local tabBar = createRoundedFrame(parent, UDim2.new(0, 60, 1, 0), UDim2.new(0, 0, 0, 0))
+    tabBar.BackgroundColor3 = THEME.Background
+    
+    local content = createRoundedFrame(parent, UDim2.new(1, -70, 1, -10), UDim2.new(0, 65, 0, 5))
+    content.BackgroundColor3 = THEME.Primary
+    content.Visible = false  -- 直到第一个标签才显示
+    
+    local function addTab(name, icon)
+        local tabButton = createButton(tabBar, icon or "", function() end, UDim2.new(1, 0, 0, 40))
+        tabButton.Position = UDim2.new(0, 0, 0, (#tabs + 1) * 45)
+        
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(1, 0, 1, 0)
+        label.BackgroundTransparency = 1
+        label.Text = name
+        label.TextColor3 = THEME.Text
+        label.TextScaled = true
+        label.Font = Enum.Font.Gotham
+        label.TextYAlignment = Enum.TextYAlignment.Center
+        label.Parent = tabButton
+        
+        local panel = createRoundedFrame(content, UDim2.new(1, -10, 1, -10), UDim2.new(0, 5, 0, 5))
+        panel.BackgroundTransparency = 1
+        panel.Visible = false
+        
+        table.insert(tabs, {button = tabButton, panel = panel, name = name})
+        
+        tabButton.MouseButton1Click:Connect(function()
+            if currentTab then
+                currentTab.panel.Visible = false
+                animateFrame(currentTab.button, {BackgroundColor3 = THEME.Background})
+            end
+            currentTab = tabs[#tabs]
+            currentTab.panel.Visible = true
+            animateFrame(currentTab.button, {BackgroundColor3 = THEME.Accent})
+            content.Visible = true
+        end)
+        
+        if #tabs == 1 then
+            tabButton.MouseButton1Click:Fire()  -- 自动选择第一个标签
+        end
+        
+        return {
+            AddButton = function(self, text, callback)
+                return createButton(panel, text, callback)
+            end,
+            AddToggle = function(self, text, default, callback)
+                return createToggle(panel, text, default, callback)
+            end,
+            AddSlider = function(self, text, min, max, default, callback)
+                return createSlider(panel, text, min, max, default, callback)
+            end
+        }
+    end
+    
+    return {
+        AddTab = addTab
+    }
+end
+
+-- 可拖动标题栏
+local function makeDraggable(frame, dragHandle)
+    local dragging = false
+    local dragStart = nil
+    local startPos = nil
+    
+    local function update(input)
+        local delta = input.Position - dragStart
+        frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+    
+    dragHandle.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            startPos = frame.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+    
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            update(input)
+        end
+    end)
+end
+
+-- 显示通知函数
+local function showNotification(options)
+    NotificationLib.Show({
+        title = options.title or "",
+        subtitle = options.subtitle or "",
+        duration = options.duration or 5,
+        position = options.position or "right",
+        icon = options.icon or "",
+        soundId = options.soundId or ""
+    })
+end
+
+-- 创建主 UI
+function BUI.CreateUI(title, size)
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "BUI_" .. title
+    screenGui.Parent = playerGui
+    screenGui.ResetOnSpawn = false
+    
+    local mainFrame = createRoundedFrame(screenGui, size or UDim2.new(0, 400, 0, 300), UDim2.new(0.5, -200, 0.5, -150))
+    mainFrame.BackgroundColor3 = THEME.Background
+    
+    -- 标题栏（可拖动）
+    local titleBar = createRoundedFrame(mainFrame, UDim2.new(1, 0, 0, 40), UDim2.new(0, 0, 0, 0))
+    titleBar.BackgroundColor3 = THEME.Primary
+    
+    local titleLabel = Instance.new("TextLabel")
+    titleLabel.Size = UDim2.new(1, -80, 1, 0)
+    titleLabel.Position = UDim2.new(0, 10, 0, 0)
+    titleLabel.BackgroundTransparency = 1
+    titleLabel.Text = title
+    titleLabel.TextColor3 = THEME.Text
+    titleLabel.TextScaled = true
+    titleLabel.Font = Enum.Font.GothamBold
+    titleLabel.Parent = titleBar
+    
+    makeDraggable(mainFrame, titleBar)
+    
+    -- 关闭按钮（可选，动画退出）
+    local closeButton = createButton(titleBar, "关闭", function()
+        animateFrame(mainFrame, {Size = UDim2.new(0, 0, 0, 0)}, TweenInfo.new(0.3)).Completed:Connect(function()
+            screenGui:Destroy()
+        end)
+    end, UDim2.new(0, 30, 0, 30))
+    closeButton.Position = UDim2.new(1, -35, 0.5, -15)
+    
+    -- 标签面板
+    local tabPanel = createTabPanel(mainFrame)
+    
+    local ui = {
+        screenGui = screenGui,
+        mainFrame = mainFrame,
+        AddTab = tabPanel.AddTab,
+        ShowNotification = showNotification,  -- 新增：显示通知方法
+        Show = function(self)
+            self.mainFrame.Visible = true
+            animateFrame(self.mainFrame, {Size = size})
+        end,
+        Hide = function(self)
+            animateFrame(self.mainFrame, {Size = UDim2.new(0, 0, 0, 0)}).Completed:Connect(function()
+                self.mainFrame.Visible = false
+            end)
+        end
+    }
+    
+    ui.mainFrame.Visible = false  -- 开始时隐藏
+    return setmetatable(ui, {__index = BUI})
+end
+
+-- 额外可拖动按钮：切换 UI 按钮
+function BUI.CreateToggleButton()
+    local toggleGui = Instance.new("ScreenGui")
+    toggleGui.Parent = playerGui
+    toggleGui.ResetOnSpawn = false
+    
+    local toggleBtn = createRoundedFrame(toggleGui, UDim2.new(0, 50, 0, 50), UDim2.new(0, 10, 0, 10))
+    toggleBtn.BackgroundColor3 = THEME.Accent
+    
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.BackgroundTransparency = 1
+    label.Text = "显示"  -- 显示图标文本
+    label.TextColor3 = THEME.Text
+    label.TextScaled = true
+    label.Font = Enum.Font.GothamBold
+    label.Parent = toggleBtn
+    
+    makeDraggable(toggleGui, toggleBtn)  -- 通过按钮拖动整个 GUI
+    
+    local visible = true
+    toggleBtn.MouseButton1Click:Connect(function()
+        visible = not visible
+        -- 假设切换主 UI；根据需要自定义
+        -- 例如：game.Players.LocalPlayer.PlayerGui.MainUI.Visible = visible
+        label.Text = visible and "显示" or "隐藏"
+    end)
+    
+    return toggleGui
+end
+
+-- 额外可拖动按钮：锁定按钮
+function BUI.CreateLockButton()
+    local lockGui = Instance.new("ScreenGui")
+    lockGui.Parent = playerGui
+    lockGui.ResetOnSpawn = false
+    
+    local lockBtn = createRoundedFrame(lockGui, UDim2.new(0, 50, 0, 50), UDim2.new(1, -60, 0, 10))
+    lockBtn.BackgroundColor3 = THEME.Secondary
+    
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.BackgroundTransparency = 1
+    label.Text = "锁"  -- 锁定图标文本
+    label.TextColor3 = THEME.Text
+    label.TextScaled = true
+    label.Font = Enum.Font.GothamBold
+    label.Parent = lockBtn
+    
+    makeDraggable(lockGui, lockBtn)
+    
+    local locked = false
+    lockBtn.MouseButton1Click:Connect(function()
+        locked = not locked
+        -- 禁用/启用主 UI 拖动；自定义目标
+        -- 例如：mainUI.titleBar.Active = not locked
+        label.Text = locked and "解" or "锁"
+        animateFrame(lockBtn, {BackgroundColor3 = locked and THEME.Accent or THEME.Secondary})
+    end)
+    
+    return lockGui
+end
+
+return BUI
