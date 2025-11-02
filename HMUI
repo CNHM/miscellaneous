@@ -1,0 +1,257 @@
+-- UIFramework.lua
+-- Roblox 本地玩家UI库 v2（中文注释 + 动画 + 外部通知）
+
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+
+-- 外部通知库
+local NotificationLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/CNHM/miscellaneous/main/Notifying"))()
+
+local UI = {}
+UI.__index = UI
+
+-- 主题
+UI.Theme = {
+    Background = Color3.fromRGB(18, 18, 20),
+    Accent = Color3.fromRGB(98, 0, 238),
+    Panel = Color3.fromRGB(28, 28, 30),
+    Text = Color3.fromRGB(235, 235, 240),
+    Muted = Color3.fromRGB(160, 160, 170),
+    Success = Color3.fromRGB(46, 204, 113),
+    Danger = Color3.fromRGB(231, 76, 60),
+}
+
+-- 创建实例
+local function new(class, props)
+    local obj = Instance.new(class)
+    for k, v in pairs(props or {}) do
+        local ok = pcall(function() obj[k] = v end)
+        if not ok then pcall(function() obj:SetAttribute(k, v) end) end
+    end
+    return obj
+end
+
+-- 动画
+local function tween(obj, props, t, style, dir, cb)
+    local info = TweenInfo.new(t or 0.18, style or Enum.EasingStyle.Quad, dir or Enum.EasingDirection.Out)
+    local tw = TweenService:Create(obj, info, props)
+    tw:Play()
+    if cb then tw.Completed:Connect(cb) end
+end
+
+local function roundCorner(parent, radius)
+    local c = new("UICorner", { Parent = parent })
+    c.CornerRadius = radius or UDim.new(0, 8)
+    return c
+end
+
+local function makeLabel(parent, text, size, pos)
+    return new("TextLabel", {
+        Parent = parent,
+        Text = text or "",
+        Size = size or UDim2.new(1, 0, 0, 20),
+        Position = pos or UDim2.new(0, 0, 0, 0),
+        BackgroundTransparency = 1,
+        TextColor3 = UI.Theme.Text,
+        Font = Enum.Font.GothamBold,
+        TextSize = 14,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+end
+
+-- ScreenGui
+function UI:CreateScreenGui(name)
+    local screen = new("ScreenGui", {
+        Name = name or "UIFramework",
+        ResetOnSpawn = true,
+        IgnoreGuiInset = true,
+        Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+    })
+    return screen
+end
+
+-- 窗口
+function UI:CreateWindow(parent, opts)
+    opts = opts or {}
+    local title = opts.Title or "窗口"
+    local size = opts.Size or UDim2.new(0, 420, 0, 320)
+    local pos = opts.Position or UDim2.new(0.5, -size.X.Offset/2, 0.5, -size.Y.Offset/2)
+
+    local frame = new("Frame", {
+        Parent = parent,
+        Size = size,
+        Position = pos,
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        BackgroundColor3 = UI.Theme.Panel,
+        BorderSizePixel = 0,
+    })
+    roundCorner(frame, UDim.new(0, 14))
+
+    local header = new("Frame", {
+        Parent = frame,
+        Size = UDim2.new(1, 0, 0, 44),
+        BackgroundTransparency = 1,
+    })
+    local titleLbl = makeLabel(header, title, UDim2.new(1, -16, 1, 0), UDim2.new(0, 8, 0, 0))
+    titleLbl.Font = Enum.Font.GothamBlack
+    titleLbl.TextSize = 18
+
+    local content = new("ScrollingFrame", {
+        Parent = frame,
+        Size = UDim2.new(1, -16, 1, -64),
+        Position = UDim2.new(0, 8, 0, 52),
+        BackgroundTransparency = 1,
+        ScrollBarThickness = 6,
+        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+    })
+
+    tween(frame, { Position = pos }, 0.25, Enum.EasingStyle.Back)
+
+    return {
+        Frame = frame,
+        Content = content,
+        Add = function(_, child) child.Parent = content end,
+    }
+end
+
+-- 按钮
+function UI:CreateButton(parent, text, callback)
+    local btn = new("TextButton", {
+        Parent = parent,
+        Size = UDim2.new(1, 0, 0, 36),
+        BackgroundColor3 = UI.Theme.Accent,
+        Text = text or "按钮",
+        TextColor3 = UI.Theme.Text,
+        Font = Enum.Font.GothamBold,
+        TextSize = 14,
+        AutoButtonColor = false,
+    })
+    roundCorner(btn, UDim.new(0, 10))
+    btn.Activated:Connect(function()
+        tween(btn, { BackgroundTransparency = 0.5 }, 0.1, nil, nil, function()
+            tween(btn, { BackgroundTransparency = 0 }, 0.2)
+        end)
+        if callback then callback() end
+    end)
+    return btn
+end
+
+-- 开关
+function UI:CreateToggle(parent, text, state, callback)
+    local f = new("Frame",{Parent=parent,Size=UDim2.new(1,0,0,36),BackgroundTransparency=1})
+    local lbl = makeLabel(f, text or "开关", UDim2.new(0.7,0,1,0), UDim2.new(0,8,0,0))
+    local toggle = new("Frame",{Parent=f,Size=UDim2.new(0,48,0,24),Position=UDim2.new(1,-56,0,6),BackgroundColor3=UI.Theme.Panel})
+    roundCorner(toggle, UDim.new(0,12))
+    local knob = new("Frame",{Parent=toggle,Size=UDim2.new(0,20,0,20),Position=UDim2.new(0,2,0,2),BackgroundColor3=UI.Theme.Muted})
+    roundCorner(knob, UDim.new(0,10))
+
+    local on = state or false
+    local function set(v)
+        on = v
+        if v then
+            tween(knob,{Position=UDim2.new(1,-22,0,2)},0.16)
+            tween(toggle,{BackgroundColor3=UI.Theme.Accent},0.16)
+        else
+            tween(knob,{Position=UDim2.new(0,2,0,2)},0.16)
+            tween(toggle,{BackgroundColor3=UI.Theme.Panel},0.16)
+        end
+        if callback then callback(on) end
+    end
+    set(on)
+    toggle.InputBegan:Connect(function(i)
+        if i.UserInputType==Enum.UserInputType.MouseButton1 then set(not on) end
+    end)
+    return f
+end
+
+-- 滑块
+function UI:CreateSlider(parent, label, min, max, default, callback)
+    min=max and min or 0; max=max or 100; default=default or min
+    local c=new("Frame",{Parent=parent,Size=UDim2.new(1,0,0,56),BackgroundTransparency=1})
+    local lbl=makeLabel(c,(label or "滑块").."："..default,UDim2.new(1,0,0,20),UDim2.new(0,8,0,0))
+    local track=new("Frame",{Parent=c,Size=UDim2.new(1,-16,0,10),Position=UDim2.new(0,8,0,28),BackgroundColor3=UI.Theme.Panel})
+    roundCorner(track)
+    local fill=new("Frame",{Parent=track,Size=UDim2.new((default-min)/(max-min),0,1,0),BackgroundColor3=UI.Theme.Accent})
+    roundCorner(fill)
+    local drag=false
+    local function update(x)
+        local rel=math.clamp((x-track.AbsolutePosition.X)/track.AbsoluteSize.X,0,1)
+        fill.Size=UDim2.new(rel,0,1,0)
+        local val=math.floor((min+rel*(max-min))*100)/100
+        lbl.Text=(label or "滑块").."："..val
+        if callback then callback(val) end
+    end
+    track.InputBegan:Connect(function(i)
+        if i.UserInputType==Enum.UserInputType.MouseButton1 then drag=true update(i.Position.X) end
+    end)
+    track.InputEnded:Connect(function(i)
+        if i.UserInputType==Enum.UserInputType.MouseButton1 then drag=false end
+    end)
+    UserInputService.InputChanged:Connect(function(i)
+        if drag and i.UserInputType==Enum.UserInputType.MouseMovement then update(i.Position.X) end
+    end)
+    return c
+end
+
+-- 输入框
+function UI:CreateTextBox(parent, label, placeholder, callback)
+    local f = new("Frame",{Parent=parent,Size=UDim2.new(1,0,0,46),BackgroundTransparency=1})
+    local lbl = makeLabel(f, label or "输入框", UDim2.new(1,0,0,20), UDim2.new(0,8,0,0))
+    local box = new("TextBox", {
+        Parent=f,
+        Size=UDim2.new(1,-16,0,26),
+        Position=UDim2.new(0,8,0,20),
+        BackgroundColor3=UI.Theme.Panel,
+        TextColor3=UI.Theme.Text,
+        Font=Enum.Font.Gotham,
+        TextSize=14,
+        PlaceholderText=placeholder or "请输入内容...",
+    })
+    roundCorner(box, UDim.new(0,8))
+    box.FocusLost:Connect(function(enter)
+        if enter and callback then callback(box.Text) end
+    end)
+    return f
+end
+
+-- 进度条
+function UI:CreateProgressBar(parent, label, value)
+    local f=new("Frame",{Parent=parent,Size=UDim2.new(1,0,0,46),BackgroundTransparency=1})
+    local lbl=makeLabel(f,label or "进度",UDim2.new(1,0,0,20),UDim2.new(0,8,0,0))
+    local bar=new("Frame",{Parent=f,Size=UDim2.new(1,-16,0,10),Position=UDim2.new(0,8,0,28),BackgroundColor3=UI.Theme.Panel})
+    roundCorner(bar)
+    local fill=new("Frame",{Parent=bar,Size=UDim2.new(math.clamp(value or 0,0,1),0,1,0),BackgroundColor3=UI.Theme.Accent})
+    roundCorner(fill)
+    function f:SetProgress(v)
+        tween(fill,{Size=UDim2.new(math.clamp(v,0,1),0,1,0)},0.2)
+    end
+    return f
+end
+
+-- 颜色选择器（仅展示随机变色演示用）
+function UI:CreateColorPicker(parent, label, callback)
+    local f=new("Frame",{Parent=parent,Size=UDim2.new(1,0,0,36),BackgroundTransparency=1})
+    local lbl=makeLabel(f,label or "颜色",UDim2.new(0.6,0,1,0),UDim2.new(0,8,0,0))
+    local btn=new("TextButton",{Parent=f,Size=UDim2.new(0.3,0,1,-6),Position=UDim2.new(0.65,0,0,3),BackgroundColor3=UI.Theme.Accent,Text="",AutoButtonColor=false})
+    roundCorner(btn)
+    btn.Activated:Connect(function()
+        local newColor = Color3.fromRGB(math.random(0,255),math.random(0,255),math.random(0,255))
+        tween(btn,{BackgroundColor3=newColor},0.25)
+        if callback then callback(newColor) end
+    end)
+    return f
+end
+
+-- 外部通知调用
+function UI:Notify(data)
+    NotificationLib.Show({
+        title = data.title or "提示",
+        subtitle = data.subtitle or "",
+        duration = data.duration or 5,
+        position = data.position or "right",
+        icon = data.icon or "rbxassetid://1234567890",
+        soundId = data.soundId or "rbxassetid://18595195017"
+    })
+end
+
+return setmetatable(UI,{__call=function(_,...)return UI end})
